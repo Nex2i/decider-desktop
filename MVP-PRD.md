@@ -5,7 +5,7 @@ Date: October 18, 2026
 Platforms: macOS and Windows
 Working name: Decider Desktop
 
-Implementation update (October 18, 2026): The app now offers a local streaming transcription test with downloadable Zipformer profiles, Nemotron streaming, and native Qwen3-ASR streaming. Microphone capture, partial/final transcript display, verified model downloads, cancellation, and app-managed model removal are implemented. JEV desktop actions and remote STT remain planned. Automatic CI runs checks; installer packaging and publishing require a manually dispatched version workflow.
+Implementation update (October 18, 2026): The app now offers a local streaming transcription test with downloadable Zipformer profiles, Nemotron streaming, and native Qwen3-ASR streaming. Microphone capture, partial/final transcript display, verified model downloads, cancellation, and app-managed model removal are implemented. JEV keys use verified OS credential storage, and an explicit connection test checks authenticated JEV model access without inference or transcript uploads. JEV desktop actions and remote STT remain planned. Automatic CI runs checks; installer packaging and publishing require a manually dispatched version workflow.
 
 ## 1. Product summary
 

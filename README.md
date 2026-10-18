@@ -13,11 +13,12 @@ Implemented:
 - Streaming-only model picker: Zipformer English Compact (about 73 MB), Zipformer Full precision (about 266 MB), Nemotron 3.5 ASR Streaming 0.6B (about 683 MB), and Qwen3-ASR Streaming 0.6B (about 1.88 GB). No JEV key is required.
 - Zipformer/Nemotron run through sherpa-onnx on CPU. Qwen uses the native `qwen3-asr` streaming API with Metal on supported Macs and CPU on Windows. Qwen warms up before microphone capture and updates in roughly two-second audio chunks; its larger memory/compute requirements can make it unsuitable for slower machines. No after-stop/batch transcription fallback is included.
 - Downloads use pinned model revisions, exact sizes, and SHA-256 verification. Interrupted downloads cannot be loaded; verified files can be reused when retrying. Models live in the OS local application-data directory under `ai.nex2i.decider/models` and can be removed in the picker.
-- Settings to save, replace, and remove a user-supplied JEV key through macOS Keychain or Windows Credential Manager. The saved key is never returned to the interface or persisted in frontend storage. It passes through the interface only while being entered and saved.
+- Settings to save, replace, and remove a user-supplied JEV key through macOS Keychain or Windows Credential Manager. Saving verifies a fresh read of the credential. The saved key is never returned to the interface or persisted in frontend storage. It passes through the interface only while being entered and saved.
+- **Test connection** validates the saved key against TypeSafe's authenticated model list and confirms JEV model access. It sends no speech or draft text and makes no inference call. Verification lasts for the current session; replacing/removing the key or refreshing setup clears it. Errors distinguish rejected keys, permissions, billing, rate limits, and connection failures.
 - Native runtime/version status, restrictive content security policy, and no general-purpose shell or URL opener permissions.
 - Automatic macOS and Windows checks for frontend compilation, native tests, formatting, and linting. Installer packaging and GitHub release publishing run only through the manual New version workflow.
 
-Not implemented yet: remote STT, JEV connection validation/requests, app discovery/launch, global shortcuts, tray/menu integration, and native unsaved-draft close protection. Saved keys are explicitly marked unvalidated. Command mode is a placeholder; local transcription does not invoke JEV.
+Not implemented yet: remote STT, JEV inference/action routing, app discovery/launch, global shortcuts, tray/menu integration, and native unsaved-draft close protection. Saved keys remain marked unvalidated until Test connection succeeds. Command mode is a placeholder; local transcription does not invoke JEV.
 
 ## Development
 
@@ -50,7 +51,7 @@ For a browser-only UI preview:
 npm run dev
 ```
 
-The preview cannot access native credentials. No API key is needed to run the initial UI. In the desktop app, open Settings to enter your own JEV key. Saving confirms secure storage only; it does not verify provider access or enable commands yet.
+The preview cannot access native credentials. No API key is needed to run the initial UI. In the desktop app, open Settings to enter your own JEV key. Saving confirms secure storage; **Test connection** checks provider access using [TypeSafe's documented model-list endpoint](https://docs.typesafe.ai/models#listing-models). A successful check does not enable desktop commands yet.
 
 ```sh
 npm run build
@@ -60,7 +61,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings
 npm run tauri build -- --no-bundle
 ```
 
-Native builds must be validated on each target OS. sherpa-onnx downloads its platform-specific static native libraries during the first Rust build. Windows builds use the static CRT to match those libraries. Release signing and macOS notarization are not configured yet.
+Native builds must be validated on each target OS. sherpa-onnx downloads its platform-specific static native libraries during the first Rust build. Windows builds use the static CRT to match those libraries. macOS bundles use ad-hoc signing for local development so the complete app has a valid signature for Keychain access. Reopen the app after rebuilding it; macOS may request Keychain approval again. Developer ID signing and macOS notarization are not configured yet. A production signing identity can be supplied through `APPLE_SIGNING_IDENTITY`.
 
 ## Manual versions and releases
 

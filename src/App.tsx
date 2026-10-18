@@ -8,6 +8,7 @@ type AppStatus = {
   version: string;
   jevKeyConfigured: boolean;
 };
+type JevConnection = { model: string; checkedAt: number };
 
 export default function App() {
   const [page, setPage] = useState<"workspace" | "settings">("workspace");
@@ -18,9 +19,12 @@ export default function App() {
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [connection, setConnection] = useState<JevConnection | null>(null);
   const desktop = isTauri();
 
   async function refreshStatus() {
+    setConnection(null);
     setStatus(await invoke<AppStatus>("app_status"));
   }
 
@@ -41,24 +45,51 @@ export default function App() {
   }, [draft]);
 
   async function updateKey(remove: boolean) {
+    setConnection(null);
     setBusy(true);
     setError("");
     setNotice("");
     try {
       if (remove) await invoke("remove_jev_key");
-      else await invoke("save_jev_key", { apiKey });
+      else setStatus(await invoke<AppStatus>("save_jev_key", { apiKey }));
       setApiKey("");
-      await refreshStatus();
+      if (remove) await refreshStatus();
       setNotice(
         remove
           ? "JEV key removed."
-          : "JEV key saved securely. Connection validation is coming next.",
+          : "JEV key saved securely. Use Test connection to verify access.",
       );
-    } catch {
+    } catch (error) {
       setError(
-        "Could not update JEV setup. Check that your OS credential store is available, then retry.",
+        typeof error === "string"
+          ? error
+          : "Could not update JEV setup. Check that your OS credential store is available, then retry.",
       );
     } finally {
+      setBusy(false);
+    }
+  }
+
+  async function testConnection() {
+    setBusy(true);
+    setTesting(true);
+    setConnection(null);
+    setError("");
+    setNotice("");
+    try {
+      const result = await invoke<JevConnection>("test_jev_connection");
+      setConnection(result);
+      setNotice(
+        `JEV connection verified. Your account can access ${result.model}.`,
+      );
+    } catch (error) {
+      setError(
+        typeof error === "string"
+          ? error
+          : "Could not verify the JEV connection. Please retry.",
+      );
+    } finally {
+      setTesting(false);
       setBusy(false);
     }
   }
@@ -217,15 +248,17 @@ export default function App() {
                 <div className="card-heading">
                   <h2>JEV connection</h2>
                   <span>
-                    {status?.jevKeyConfigured
-                      ? "KEY SAVED · NOT VALIDATED"
-                      : "NOT CONFIGURED"}
+                    {connection
+                      ? "CONNECTION VERIFIED"
+                      : status?.jevKeyConfigured
+                        ? "KEY SAVED · NOT VALIDATED"
+                        : "NOT CONFIGURED"}
                   </span>
                 </div>
                 <p>
                   Use your own TypeSafe JEV API key. Usage is billed to your
-                  provider account. Connection testing and command routing will
-                  be added next.
+                  provider account. Test your saved key to check JEV access.
+                  Desktop command routing is coming next.
                 </p>
                 <label htmlFor="api-key">
                   {status?.jevKeyConfigured ? "Replace API key" : "API key"}
@@ -255,7 +288,16 @@ export default function App() {
                     }
                     onClick={() => void updateKey(false)}
                   >
-                    {busy ? "Updating…" : "Save key securely"}
+                    {busy && !testing ? "Updating…" : "Save key securely"}
+                  </button>
+                  <button
+                    className="text-button"
+                    disabled={
+                      !desktop || busy || !status?.jevKeyConfigured || !!apiKey
+                    }
+                    onClick={() => void testConnection()}
+                  >
+                    {testing ? "Testing connection…" : "Test connection"}
                   </button>
                   <button
                     className="text-button"
@@ -283,6 +325,11 @@ export default function App() {
                     Refresh status
                   </button>
                 </div>
+                <p className="fine-print">
+                  {connection
+                    ? `Verified this session at ${new Date(connection.checkedAt * 1000).toLocaleTimeString()}. Model access: ${connection.model}. Re-test after reopening the app.`
+                    : "Test connection checks your saved key with TypeSafe’s model list. It sends no speech or draft text and makes no inference request. Save any replacement key before testing."}
+                </p>
                 <p className="fine-print">
                   Saved in macOS Keychain or Windows Credential Manager. The
                   saved key is never sent back to the interface or stored in
