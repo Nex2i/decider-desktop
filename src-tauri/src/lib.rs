@@ -1,3 +1,4 @@
+mod qwen_tokenizer;
 mod speech;
 
 use keyring::{Entry, Error as KeyringError};

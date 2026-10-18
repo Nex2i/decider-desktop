@@ -1,7 +1,7 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sherpa_onnx::{OnlineRecognizer, OnlineRecognizerConfig};
+use sherpa_onnx::{LinearResampler, OnlineRecognizer, OnlineRecognizerConfig, OnlineStream};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -28,6 +28,9 @@ struct ModelSpec {
     source: String,
     revision: String,
     files: Vec<ModelFile>,
+    family: String,
+    #[serde(rename = "maxRecordingSeconds")]
+    max_recording_seconds: u64,
 }
 
 #[derive(Serialize)]
@@ -40,6 +43,8 @@ pub struct ModelInfo {
     source: String,
     download_bytes: u64,
     installed: bool,
+    streaming: bool,
+    max_recording_seconds: u64,
 }
 
 #[derive(Clone, Serialize)]
@@ -165,6 +170,8 @@ pub fn list_models(app: AppHandle) -> Result<Vec<ModelInfo>, String> {
                 source: spec.source.clone(),
                 download_bytes: spec.files.iter().map(|f| f.size).sum(),
                 installed: installed(spec, &model_root(&app, spec)?),
+                streaming: true,
+                max_recording_seconds: spec.max_recording_seconds,
             })
         })
         .collect()
@@ -203,6 +210,8 @@ async fn download_files(
             );
             continue;
         }
+        fs::create_dir_all(destination.parent().ok_or("Invalid model file path.")?)
+            .map_err(|_| "Could not create model file directory.")?;
         let partial = destination.with_extension("part");
         let result = (async {
             let mut response = client
@@ -360,11 +369,151 @@ fn create_recognizer(spec: &ModelSpec, root: &Path) -> Result<OnlineRecognizer, 
     config.model_config.transducer.decoder = file_path("decoder");
     config.model_config.transducer.joiner = file_path("joiner");
     config.model_config.tokens = file_path("tokens");
-    config.model_config.model_type = Some("zipformer2".into());
+    config.model_config.model_type = if spec.family == "zipformer" {
+        Some("zipformer2".into())
+    } else {
+        None
+    };
     config.model_config.num_threads = 2;
     config.enable_endpoint = false;
     OnlineRecognizer::create(&config)
         .ok_or_else(|| "Could not load the speech model. Re-download it and try again.".into())
+}
+
+// Every variant consumes live audio and emits partial text. No batch/after-stop
+// recognizer is available as a fallback.
+enum RecognitionSession {
+    Online(OnlineRecognizer, OnlineStream),
+    Qwen(Box<QwenSession>),
+}
+
+struct QwenSession {
+    engine: qwen3_asr::AsrInference,
+    stream: qwen3_asr::StreamingState,
+    resampler: Option<LinearResampler>,
+    current: String,
+}
+
+impl RecognitionSession {
+    fn create(spec: &ModelSpec, root: &Path) -> Result<Self, String> {
+        if spec.family != "qwen3" {
+            let recognizer = create_recognizer(spec, root)?;
+            let stream = recognizer.create_stream();
+            if spec.family == "nemotron" {
+                stream.set_option("language", "auto");
+            }
+            return Ok(Self::Online(recognizer, stream));
+        }
+        for file in &spec.files {
+            verify_file(&root.join(&file.name), file)?;
+        }
+        // Rebuild the derived tokenizer from verified upstream inputs, rather
+        // than trusting a stale or edited generated cache file.
+        let read = |name: &str| {
+            fs::read_to_string(root.join(name))
+                .map_err(|_| "Could not read Qwen tokenizer files.".to_string())
+        };
+        let tokenizer = crate::qwen_tokenizer::build(
+            &read("vocab.json")?,
+            &read("merges.txt")?,
+            &read("tokenizer_config.json")?,
+        )?;
+        fs::write(root.join("tokenizer.json"), tokenizer)
+            .map_err(|_| "Could not prepare the Qwen tokenizer.")?;
+        let engine = qwen3_asr::AsrInference::load(root, qwen3_asr::best_device()).map_err(
+            |_| "Could not load Qwen streaming. Check available memory or choose a smaller model.",
+        )?;
+        // Compile the first inference kernels before opening the microphone.
+        // Discard this synthetic session so it cannot enter the user's transcript.
+        let mut warmup =
+            engine.init_streaming(qwen3_asr::StreamingOptions::default().with_chunk_size_sec(2.0));
+        engine
+            .feed_audio(&mut warmup, &[0.0; 32_000])
+            .map_err(|_| "Could not prepare Qwen for live transcription. Try a smaller model.")?;
+        let stream =
+            engine.init_streaming(qwen3_asr::StreamingOptions::default().with_chunk_size_sec(2.0));
+        Ok(Self::Qwen(Box::new(QwenSession {
+            engine,
+            stream,
+            resampler: None,
+            current: String::new(),
+        })))
+    }
+
+    fn accept(&mut self, sample_rate: i32, samples: &[f32]) -> Result<(), String> {
+        match self {
+            Self::Online(recognizer, stream) => {
+                stream.accept_waveform(sample_rate, samples);
+                while recognizer.is_ready(stream) {
+                    recognizer.decode(stream);
+                }
+            }
+            Self::Qwen(session) => {
+                if sample_rate != 16000 && session.resampler.is_none() {
+                    session.resampler = Some(
+                        LinearResampler::create(sample_rate, 16000)
+                            .ok_or("Could not prepare live audio for Qwen.")?,
+                    );
+                }
+                let converted;
+                let samples = if let Some(resampler) = &session.resampler {
+                    converted = resampler.resample(samples, false);
+                    &converted
+                } else {
+                    samples
+                };
+                if let Some(result) = session
+                    .engine
+                    .feed_audio(&mut session.stream, samples)
+                    .map_err(
+                        |_| "Qwen streaming failed. Try a smaller model or a shorter session.",
+                    )?
+                {
+                    session.current = result.text;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn partial(&self) -> Option<String> {
+        match self {
+            Self::Online(recognizer, stream) => {
+                recognizer.get_result(stream).map(|result| result.text)
+            }
+            Self::Qwen(session) => Some(session.current.clone()),
+        }
+    }
+
+    fn finish(&mut self, sample_rate: i32) -> Result<String, String> {
+        match self {
+            Self::Online(recognizer, stream) => {
+                stream.accept_waveform(sample_rate, &vec![0.0; sample_rate as usize / 2]);
+                stream.input_finished();
+                while recognizer.is_ready(stream) {
+                    recognizer.decode(stream);
+                }
+                Ok(recognizer
+                    .get_result(stream)
+                    .map(|result| result.text.trim().to_owned())
+                    .unwrap_or_default())
+            }
+            Self::Qwen(session) => {
+                if let Some(resampler) = &session.resampler {
+                    let tail = resampler.resample(&[], true);
+                    session
+                        .engine
+                        .feed_audio(&mut session.stream, &tail)
+                        .map_err(|_| "Could not flush Qwen streaming audio.")?;
+                }
+                session
+                    .engine
+                    .finish_streaming(&mut session.stream)
+                    .map(|result| result.text.trim().to_owned())
+                    .map_err(|_| "Could not finalize the live Qwen transcript.".into())
+            }
+        }
+    }
 }
 
 fn emit_speech(
@@ -411,11 +560,10 @@ fn run_microphone(
     id: &str,
     stop: &AtomicU8,
 ) -> Result<(), String> {
-    let recognizer = create_recognizer(spec, root)?;
+    let mut recognition = RecognitionSession::create(spec, root)?;
     if stop.load(Ordering::Relaxed) != 0 {
         return Ok(());
     }
-    let stream = recognizer.create_stream();
     let device = cpal::default_host()
         .default_input_device()
         .ok_or("No default microphone found. Connect or select a microphone in system settings.")?;
@@ -424,7 +572,7 @@ fn run_microphone(
         .map_err(|_| "Could not read microphone settings. Check system microphone permissions.")?;
     let config = supported.config();
     let sample_rate = config.sample_rate as i32;
-    let (tx, rx) = mpsc::sync_channel(128);
+    let (tx, rx) = mpsc::sync_channel(512);
     let failed = Arc::new(AtomicBool::new(false));
     let microphone = match supported.sample_format() {
         cpal::SampleFormat::F32 => input_stream::<f32>(&device, &config, tx, failed.clone()),
@@ -442,20 +590,19 @@ fn run_microphone(
     emit_speech(app, id, "listening", "", None);
     let started = Instant::now();
     let mut previous = String::new();
-    while stop.load(Ordering::Relaxed) == 0 && started.elapsed() < Duration::from_secs(60) {
+    while stop.load(Ordering::Relaxed) == 0
+        && started.elapsed() < Duration::from_secs(spec.max_recording_seconds)
+    {
         if failed.load(Ordering::Relaxed) {
             return Err("Microphone capture failed or processing fell behind. Try the compact model or check your input device.".into());
         }
         match rx.recv_timeout(Duration::from_millis(25)) {
             Ok(samples) => {
-                stream.accept_waveform(sample_rate, &samples);
-                while recognizer.is_ready(&stream) {
-                    recognizer.decode(&stream);
-                }
-                if let Some(result) = recognizer.get_result(&stream)
-                    && result.text != previous
+                recognition.accept(sample_rate, &samples)?;
+                if let Some(text) = recognition.partial()
+                    && text != previous
                 {
-                    previous = result.text;
+                    previous = text;
                     emit_speech(app, id, "partial", previous.trim(), None);
                 }
             }
@@ -472,23 +619,15 @@ fn run_microphone(
     }
     emit_speech(app, id, "finalizing", &previous, None);
     for samples in rx.try_iter() {
-        stream.accept_waveform(sample_rate, &samples);
-        while recognizer.is_ready(&stream) {
-            recognizer.decode(&stream);
-        }
-    }
-    stream.accept_waveform(sample_rate, &vec![0.0; sample_rate as usize / 2]);
-    stream.input_finished();
-    while recognizer.is_ready(&stream) {
-        recognizer.decode(&stream);
+        recognition.accept(sample_rate, &samples)?;
     }
     if stop.load(Ordering::Relaxed) == 2 {
         return Ok(());
     }
-    let text = recognizer
-        .get_result(&stream)
-        .map(|r| r.text.trim().to_string())
-        .unwrap_or_default();
+    let text = recognition.finish(sample_rate)?;
+    if stop.load(Ordering::Relaxed) == 2 {
+        return Ok(());
+    }
     emit_speech(
         app,
         id,
@@ -588,9 +727,15 @@ mod tests {
     fn catalog_is_bounded_and_complete() {
         assert!(model("../../arbitrary-path").is_err());
         for model in catalog() {
-            assert_eq!(model.files.len(), 4);
+            assert!(model.files.len() >= 4);
+            assert!(["zipformer", "nemotron", "qwen3"].contains(&model.family.as_str()));
+            assert!((1..=60).contains(&model.max_recording_seconds));
             for file in &model.files {
-                assert!(!file.name.contains('/'));
+                assert!(
+                    Path::new(&file.name)
+                        .components()
+                        .all(|part| matches!(part, std::path::Component::Normal(_)))
+                );
                 assert!(!file.name.contains('\\'));
                 assert!(file.url.starts_with("https://huggingface.co/"));
                 assert!(file.url.contains(&model.revision));
@@ -628,7 +773,9 @@ mod tests {
                 license: String::new(),
                 source: String::new(),
                 revision: "revision".into(),
-                files: vec![spec]
+                files: vec![spec],
+                family: "zipformer".into(),
+                max_recording_seconds: 60,
             },
             &root
         ));
@@ -657,24 +804,31 @@ mod tests {
     #[ignore = "Requires downloaded model and public test WAV in DECIDER_SPEECH_TEST_DIR"]
     fn transcribes_real_audio() {
         let root = PathBuf::from(std::env::var("DECIDER_SPEECH_TEST_DIR").unwrap());
-        let recognizer = create_recognizer(model("zipformer-en-int8").unwrap(), &root).unwrap();
+        let id = std::env::var("DECIDER_SPEECH_TEST_MODEL")
+            .unwrap_or_else(|_| "zipformer-en-int8".into());
+        let mut recognition = RecognitionSession::create(model(&id).unwrap(), &root).unwrap();
         let wave = sherpa_onnx::Wave::read(root.join("sample.wav").to_str().unwrap()).unwrap();
-        let stream = recognizer.create_stream();
+        let started = Instant::now();
+        let mut observed_partial = false;
         for samples in wave.samples().chunks(1600) {
-            stream.accept_waveform(wave.sample_rate(), samples);
-            while recognizer.is_ready(&stream) {
-                recognizer.decode(&stream);
-            }
+            recognition.accept(wave.sample_rate(), samples).unwrap();
+            observed_partial |= recognition
+                .partial()
+                .is_some_and(|text| !text.trim().is_empty());
         }
-        stream.accept_waveform(
-            wave.sample_rate(),
-            &vec![0.0; wave.sample_rate() as usize / 2],
+        assert!(
+            observed_partial,
+            "Model must produce text BEFORE recording stops."
         );
-        stream.input_finished();
-        while recognizer.is_ready(&stream) {
-            recognizer.decode(&stream);
-        }
-        let text = recognizer.get_result(&stream).unwrap().text.to_lowercase();
+        let text = recognition
+            .finish(wave.sample_rate())
+            .unwrap()
+            .to_lowercase();
+        println!(
+            "{id}: streamed {:.1}s of audio in {:.2}s",
+            wave.samples().len() as f64 / wave.sample_rate() as f64,
+            started.elapsed().as_secs_f64()
+        );
         assert!(
             text.contains("after early nightfall"),
             "Unexpected transcript: {text}"

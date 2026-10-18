@@ -10,7 +10,8 @@ Implemented:
 
 - Tauri 2 desktop shell with a shared React/TypeScript interface and Rust core.
 - Workspace with a downloadable model picker, live partial transcripts, Stop/Cancel controls, editable session-only text, copy, and confirmed clear.
-- Two English Zipformer profiles: Compact (int8, about 73 MB) and Full precision (about 266 MB), using sherpa-onnx on CPU. No JEV key is required for transcription.
+- Streaming-only model picker: Zipformer English Compact (about 73 MB), Zipformer Full precision (about 266 MB), Nemotron 3.5 ASR Streaming 0.6B (about 683 MB), and Qwen3-ASR Streaming 0.6B (about 1.88 GB). No JEV key is required.
+- Zipformer/Nemotron run through sherpa-onnx on CPU. Qwen uses the native `qwen3-asr` streaming API with Metal on supported Macs and CPU on Windows. Qwen warms up before microphone capture and updates in roughly two-second audio chunks; its larger memory/compute requirements can make it unsuitable for slower machines. No after-stop/batch transcription fallback is included.
 - Downloads use pinned model revisions, exact sizes, and SHA-256 verification. Interrupted downloads cannot be loaded; verified files can be reused when retrying. Models live in the OS local application-data directory under `ai.nex2i.decider/models` and can be removed in the picker.
 - Settings to save, replace, and remove a user-supplied JEV key through macOS Keychain or Windows Credential Manager. The saved key is never returned to the interface or persisted in frontend storage. It passes through the interface only while being entered and saved.
 - Native runtime/version status, restrictive content security policy, and no general-purpose shell or URL opener permissions.
@@ -37,9 +38,9 @@ npm run tauri dev
 4. Speak and watch the live transcript. **Stop & keep text** appends the finalized result to Your text. **Cancel** or Escape discards the current recording and preserves existing text. Recording stops at 60 seconds.
 5. Use the picker to compare profiles or remove a download. Switching views cancels an active recording/download.
 
-Audio is processed in memory on your device and is not saved or uploaded. No JEV key or internet connection is required after the model is installed. macOS and Windows microphone privacy settings must allow the app to use your input device. The browser preview cannot download or run the native speech engine.
+Every model produces partial text while recording; Stop only flushes the last chunk and keeps the transcript. Audio is processed in memory on your device and is not saved or uploaded. No JEV key or internet connection is required after the model is installed. macOS and Windows microphone privacy settings must allow the app to use your input device. The browser preview cannot download or run the native speech engine.
 
-The model catalog is in `src-tauri/models.json`; it pins [the published Zipformer checkpoint](https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26), licensed Apache-2.0. These are two precision profiles of the same model, not two model families. Qwen and Nemotron are not bundled yet.
+The model catalog is in `src-tauri/models.json`. It pins the published revisions and hashes for [Zipformer](https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26) (Apache-2.0), [Nemotron](https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11) (OpenMDW-1.1), and [Qwen3-ASR](https://huggingface.co/Qwen/Qwen3-ASR-0.6B) (Apache-2.0). The native runtime reads only these verified local files; its automatic model-hub downloader is disabled. The Qwen tokenizer reconstruction code preserves its upstream MIT notice.
 
 ## Browser preview
 

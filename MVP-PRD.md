@@ -5,7 +5,7 @@ Date: October 18, 2026
 Platforms: macOS and Windows
 Working name: Decider Desktop
 
-Implementation update (October 18, 2026): The app now offers a local streaming transcription test with downloadable Compact/int8 and Full precision English Zipformer profiles through sherpa-onnx. Microphone capture, partial/final transcript display, verified model downloads, cancellation, and app-managed model removal are implemented. JEV desktop actions and remote STT remain planned. Automatic CI runs checks; installer packaging and publishing require a manually dispatched version workflow.
+Implementation update (October 18, 2026): The app now offers a local streaming transcription test with downloadable Zipformer profiles, Nemotron streaming, and native Qwen3-ASR streaming. Microphone capture, partial/final transcript display, verified model downloads, cancellation, and app-managed model removal are implemented. JEV desktop actions and remote STT remain planned. Automatic CI runs checks; installer packaging and publishing require a manually dispatched version workflow.
 
 ## 1. Product summary
 
@@ -90,6 +90,7 @@ Measure full workflow latency, including transcription and JEV. Track cold model
 - Support one local STT engine/model configuration and one remote STT provider in the MVP. Final implementations are selected during feasibility work.
 - Offer an explicit provider setting; never silently switch from local transcription to remote transcription.
 - Handle no speech, unintelligible audio, missing microphone access, model load failures, and remote failures without executing an action.
+- Require live partial transcription from every selectable STT model, including future remote providers. Exclude after-stop/batch-only recognition and automatic offline-mode fallbacks. Stop may flush a final streaming chunk.
 - Preserve STT wording and available punctuation. Translation, summarization, and stylistic rewriting are excluded.
 
 ### JEV decision routing
@@ -190,7 +191,7 @@ JEV is a classification dependency, not an STT engine or text generator. No alte
 | --- | --- |
 | JEV access or API behavior differs from assumptions | Validate in milestone 1; do not substitute another model without a product decision |
 | Local model is too slow or too large | Benchmark on both reference machines, show requirements before download, and choose the supported configuration based on results |
-| Remote STT provider remains unspecified | Select one after validating streaming/batch behavior, privacy, credential handling, and cost; only batch transcription is required |
+| Remote STT provider remains unspecified | Select one after validating streaming/batch behavior, privacy, credential handling, and cost; streaming partial transcripts are required |
 | Names and accents cause incorrect routing | Evaluate realistic utterances, tune aliases and thresholds, and require clarification when uncertain |
 | API expense or network latency hurts usability | Measure per-interaction usage and latency; avoid continuous inference and cap request timeouts/retries |
 | Command/dictation confusion | Keep mode visible and default the text capture flow to explicit Dictation mode |

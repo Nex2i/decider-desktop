@@ -9,6 +9,8 @@ type ModelInfo = {
   description: string;
   downloadBytes: number;
   installed: boolean;
+  streaming: boolean;
+  maxRecordingSeconds: number;
 };
 type Progress = { modelId: string; downloaded: number; total: number };
 type SpeechUpdate = {
@@ -29,8 +31,12 @@ const previewModels: ModelInfo[] = catalog.map((model) => ({
   ...model,
   downloadBytes: model.files.reduce((sum, file) => sum + file.size, 0),
   installed: false,
+  streaming: true,
 }));
-const megabytes = (bytes: number) => `${Math.ceil(bytes / 1_000_000)} MB`;
+const megabytes = (bytes: number) =>
+  bytes >= 1_000_000_000
+    ? `${(bytes / 1_000_000_000).toFixed(2)} GB`
+    : `${Math.ceil(bytes / 1_000_000)} MB`;
 const message = (error: unknown) =>
   typeof error === "string" ? error : "Something went wrong. Please retry.";
 
@@ -153,11 +159,14 @@ export default function SpeechPanel({
   useEffect(() => {
     if (phase !== "listening") return;
     const timer = window.setInterval(
-      () => setElapsed((seconds) => Math.min(60, seconds + 1)),
+      () =>
+        setElapsed((seconds) =>
+          Math.min(selected.maxRecordingSeconds, seconds + 1),
+        ),
       1000,
     );
     return () => window.clearInterval(timer);
-  }, [phase]);
+  }, [phase, selected.maxRecordingSeconds]);
 
   async function stop(cancel: boolean) {
     if (!session.current) return;
@@ -278,10 +287,7 @@ export default function SpeechPanel({
           </option>
         ))}
       </select>
-      <p className="model-description">
-        {selected.description} Choose Compact for a smaller download; Full
-        precision uses more disk space and may run slower.
-      </p>
+      <p className="model-description">{selected.description}</p>
       <div className="speech-actions">
         {!selected.installed ? (
           <button
@@ -353,10 +359,10 @@ export default function SpeechPanel({
           <div className="listening-label">
             <span className="small-dot" />
             {phase === "loading"
-              ? "Loading model…"
+              ? "Preparing live transcription…"
               : phase === "finalizing"
                 ? "Finishing…"
-                : `Listening · ${elapsed}s / 60s`}
+                : `Listening · ${elapsed}s / ${selected.maxRecordingSeconds}s`}
           </div>
           <p>
             {liveText || "Your speech will appear here as it is recognized."}
@@ -365,7 +371,7 @@ export default function SpeechPanel({
       )}
       <p className="fine-print">
         {desktop
-          ? "Uses your default system microphone. Recording stops after 60 seconds. Stop to append the final transcript below; Escape cancels."
+          ? `Live transcription only. Uses your default microphone and stops after ${selected.maxRecordingSeconds} seconds. Stop keeps the live transcript below; Escape cancels.`
           : "Open the desktop app to download models and use your microphone. The browser preview cannot run the native speech engine."}
       </p>
       {error && (

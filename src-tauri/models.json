@@ -35,7 +35,9 @@
         "size": 5048,
         "sha256": "49e3c2646595fd907228b3c6787069658f67b17377c60aeb8619c4551b2316fb"
       }
-    ]
+    ],
+    "family": "zipformer",
+    "maxRecordingSeconds": 60
   },
   {
     "id": "zipformer-en-fp32",
@@ -72,6 +74,95 @@
         "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/672fbf1b30579d6585301139bb363f42a0ad4a24/tokens.txt",
         "size": 5048,
         "sha256": "49e3c2646595fd907228b3c6787069658f67b17377c60aeb8619c4551b2316fb"
+      }
+    ],
+    "family": "zipformer",
+    "maxRecordingSeconds": 60
+  },
+  {
+    "id": "nemotron-3.5-int8",
+    "name": "Nemotron 3.5 ASR \u00b7 Streaming 0.6B",
+    "description": "Multilingual streaming speech recognition on CPU. Larger download than Zipformer; no API key needed.",
+    "license": "OpenMDW-1.1",
+    "source": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11",
+    "revision": "ab43d895f5985b1bbab8b6eac8607fcdc05343f3",
+    "family": "nemotron",
+    "maxRecordingSeconds": 60,
+    "files": [
+      {
+        "role": "encoder",
+        "name": "encoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11/resolve/ab43d895f5985b1bbab8b6eac8607fcdc05343f3/encoder.int8.onnx",
+        "size": 657601403,
+        "sha256": "012e9321373af99021415e0b0eb3ec827b4be3153be6f30d9b448fe65e896e68"
+      },
+      {
+        "role": "decoder",
+        "name": "decoder.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11/resolve/ab43d895f5985b1bbab8b6eac8607fcdc05343f3/decoder.int8.onnx",
+        "size": 14978075,
+        "sha256": "19f9c98fc6d0a2c33a65a43b36fdb2e914c26c0aa9764be3aebc502a1e982fb0"
+      },
+      {
+        "role": "joiner",
+        "name": "joiner.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11/resolve/ab43d895f5985b1bbab8b6eac8607fcdc05343f3/joiner.int8.onnx",
+        "size": 9504438,
+        "sha256": "4101c7c679a0bc30483794b27a059e34e79232aa2068d78d51231a22c8b0d7ce"
+      },
+      {
+        "role": "tokens",
+        "name": "tokens.txt",
+        "url": "https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11/resolve/ab43d895f5985b1bbab8b6eac8607fcdc05343f3/tokens.txt",
+        "size": 131440,
+        "sha256": "729cc103155bafa785f9cd45746cd41cabe97eab7182fc04d594129587958f8a"
+      }
+    ]
+  },
+  {
+    "id": "qwen3-asr-0.6b-streaming",
+    "name": "Qwen3-ASR \u00b7 Streaming 0.6B",
+    "description": "Multilingual streaming with live text in roughly 2-second chunks. Uses Metal on supported Macs and CPU on Windows. Larger download and memory requirements.",
+    "license": "Apache-2.0",
+    "source": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B",
+    "revision": "5eb144179a02acc5e5ba31e748d22b0cf3e303b0",
+    "family": "qwen3",
+    "maxRecordingSeconds": 60,
+    "files": [
+      {
+        "role": "config",
+        "name": "config.json",
+        "url": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/5eb144179a02acc5e5ba31e748d22b0cf3e303b0/config.json",
+        "size": 6193,
+        "sha256": "76d3ae4601ce939830b2517f4a6cadb86cc51316c3900af6b020b051c21a478c"
+      },
+      {
+        "role": "model",
+        "name": "model.safetensors",
+        "url": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/5eb144179a02acc5e5ba31e748d22b0cf3e303b0/model.safetensors",
+        "size": 1876091704,
+        "sha256": "79d6cbd4c98c7bbffe9db2edac07f56cd6637d0d5944b27f6c2b8353840323ea"
+      },
+      {
+        "role": "vocab",
+        "name": "vocab.json",
+        "url": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/5eb144179a02acc5e5ba31e748d22b0cf3e303b0/vocab.json",
+        "size": 2776833,
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910"
+      },
+      {
+        "role": "merges",
+        "name": "merges.txt",
+        "url": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/5eb144179a02acc5e5ba31e748d22b0cf3e303b0/merges.txt",
+        "size": 1671853,
+        "sha256": "8831e4f1a044471340f7c0a83d7bd71306a5b867e95fd870f74d0c5308a904d5"
+      },
+      {
+        "role": "tokenizer_config",
+        "name": "tokenizer_config.json",
+        "url": "https://huggingface.co/Qwen/Qwen3-ASR-0.6B/resolve/5eb144179a02acc5e5ba31e748d22b0cf3e303b0/tokenizer_config.json",
+        "size": 12487,
+        "sha256": "4942d005604266809309cabc9f4e9cb89ce855d59b14681fdc0e1cc62ea26c4c"
       }
     ]
   }
