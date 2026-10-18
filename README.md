@@ -18,7 +18,9 @@ Not implemented yet: microphone capture, local model downloads/inference, remote
 
 ## Development
 
-Install Node.js 24 LTS or newer supported by Vite and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/), including stable Rust. Windows development also requires the Microsoft C++ build tools and WebView2; macOS requires Xcode command line tools.
+Use Node.js **24.22.0 LTS** (pinned in `.nvmrc`) and Rust **1.99.1 stable** (pinned in `rust-toolchain.toml`). Install the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/). Windows development also requires the Microsoft C++ build tools and WebView2; macOS requires Xcode command line tools.
+
+If you use nvm, run `nvm install` and `nvm use` in this directory first. npm rejects unsupported Node versions to keep local development aligned with CI.
 
 ```sh
 npm ci
@@ -42,6 +44,12 @@ npm run tauri build -- --no-bundle
 ```
 
 Native builds must be validated on each target OS. Release signing, notarization, and installer distribution are not configured yet. CI builds an executable for validation and does not publish releases.
+
+## Dependency policy
+
+Use the latest stable releases, choosing the latest LTS line where the upstream project offers one. Avoid prerelease, beta, canary, and nightly builds. As of October 18, 2026, Node 24 is the latest LTS line; Node 26 has not entered LTS. React, TypeScript, Tauri, and Rust use current stable releases rather than an LTS channel for this project.
+
+Direct dependencies and toolchains are pinned, and npm/Cargo lockfiles are committed. Upgrade them deliberately together, review migration requirements, and run the macOS and Windows checks before accepting an update. Keep `@types/node` on the selected Node LTS major.
 
 ## Architecture
 

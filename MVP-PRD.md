@@ -132,7 +132,7 @@ Measure full workflow latency, including transcription and JEV. Track cold model
 
 ## 8. Proposed technical approach
 
-Recommended stack: Tauri 2 with a Rust application core and a shared React/TypeScript interface. This is a proposed architecture to validate during feasibility. Swift supports Windows as a language, but Apple’s SwiftUI does not provide a supported Windows UI; a SwiftUI-first implementation would require another Windows presentation layer.
+Recommended stack: Tauri 2 with a Rust application core and a shared React/TypeScript interface. Use the latest stable dependencies and toolchains, selecting LTS releases where officially offered; exclude prerelease/nightly builds. Pin verified versions and commit lockfiles, and validate upgrades on macOS and Windows. This is a proposed architecture to validate during feasibility. Swift supports Windows as a language, but Apple’s SwiftUI does not provide a supported Windows UI; a SwiftUI-first implementation would require another Windows presentation layer.
 
 - Shared frontend: onboarding, recording controls, mode selection, text area, clarification, settings, and status feedback.
 - Shared Rust core: interaction lifecycle, STT orchestration, JEV HTTP integration, policy validation, model downloads, and diagnostics. Keep API credentials and authenticated provider requests in the core; the frontend receives only masked configuration state and results.
