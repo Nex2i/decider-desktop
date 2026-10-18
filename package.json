@@ -1,0 +1,31 @@
+{
+  "name": "decider-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "check": "tsc --noEmit",
+    "format": "prettier --write src index.html package.json vite.config.ts tsconfig*.json src-tauri/*.json src-tauri/capabilities/*.json .github/workflows/*.yml README.md",
+    "format:check": "prettier --check src index.html package.json vite.config.ts tsconfig*.json src-tauri/*.json src-tauri/capabilities/*.json .github/workflows/*.yml README.md"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^24",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^6.0.2",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "vite": "^8.0.16"
+  },
+  "description": "A cross-platform voice-first desktop assistant powered by STT and JEV."
+}
