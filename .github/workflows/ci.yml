@@ -3,6 +3,9 @@ on:
   push:
     branches: [main]
   pull_request:
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -24,8 +27,9 @@ jobs:
           components: rustfmt, clippy
       - run: npm ci
       - run: npm run format:check
+      - run: npm test
+      - run: npm run check:versions
       - run: npm run build
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings
-      - run: npm run tauri build -- --no-bundle

@@ -1,0 +1,3 @@
+# sherpa-onnx ships Windows native libraries linked with the static CRT.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

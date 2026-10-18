@@ -1,0 +1,78 @@
+[
+  {
+    "id": "zipformer-en-int8",
+    "name": "Zipformer English \u00b7 Compact",
+    "description": "English streaming speech recognition. Runs locally on CPU; no API key needed.",
+    "license": "Apache-2.0",
+    "source": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26",
+    "revision": "672fbf1b30579d6585301139bb363f42a0ad4a24",
+    "files": [
+      {
+        "role": "encoder",
+        "name": "encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/672fbf1b30579d6585301139bb363f42a0ad4a24/encoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+        "size": 71083163,
+        "sha256": "563fde436d16cf7607cf408cd6b30909819d03162652ef389c2450ced3f45ac1"
+      },
+      {
+        "role": "decoder",
+        "name": "decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/672fbf1b30579d6585301139bb363f42a0ad4a24/decoder-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+        "size": 1307236,
+        "sha256": "98da299f471e38bb4e1a8df579b8cc9122d6039576a77e357b3c60f17dd83b02"
+      },
+      {
+        "role": "joiner",
+        "name": "joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/672fbf1b30579d6585301139bb363f42a0ad4a24/joiner-epoch-99-avg-1-chunk-16-left-128.int8.onnx",
+        "size": 259335,
+        "sha256": "d944208d660d67c8d72cd2acaeac971fa5ceb8c80e76c1968148846fedd6e297"
+      },
+      {
+        "role": "tokens",
+        "name": "tokens.txt",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/672fbf1b30579d6585301139bb363f42a0ad4a24/tokens.txt",
+        "size": 5048,
+        "sha256": "49e3c2646595fd907228b3c6787069658f67b17377c60aeb8619c4551b2316fb"
+      }
+    ]
+  },
+  {
+    "id": "zipformer-en-fp32",
+    "name": "Zipformer English \u00b7 Full precision",
+    "description": "English streaming speech recognition. Runs locally on CPU; no API key needed.",
+    "license": "Apache-2.0",
+    "source": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26",
+    "revision": "672fbf1b30579d6585301139bb363f42a0ad4a24",
+    "files": [
+      {
+        "role": "encoder",
+        "name": "encoder-epoch-99-avg-1-chunk-16-left-128.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/672fbf1b30579d6585301139bb363f42a0ad4a24/encoder-epoch-99-avg-1-chunk-16-left-128.onnx",
+        "size": 262127043,
+        "sha256": "a423883ce5754507fd941755ab0b5bc426a84ac670cbe21cf060e9e2c66dc660"
+      },
+      {
+        "role": "decoder",
+        "name": "decoder-epoch-99-avg-1-chunk-16-left-128.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/672fbf1b30579d6585301139bb363f42a0ad4a24/decoder-epoch-99-avg-1-chunk-16-left-128.onnx",
+        "size": 2092621,
+        "sha256": "7bf787f90b194b307e5a4ad6a34fadb4e748304c35f78a8d66358a05b13ee6ef"
+      },
+      {
+        "role": "joiner",
+        "name": "joiner-epoch-99-avg-1-chunk-16-left-128.onnx",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/672fbf1b30579d6585301139bb363f42a0ad4a24/joiner-epoch-99-avg-1-chunk-16-left-128.onnx",
+        "size": 1026405,
+        "sha256": "210591f72b3c56b8364f85f345dca240bc2b4c00632848f4aa923630d5639d3b"
+      },
+      {
+        "role": "tokens",
+        "name": "tokens.txt",
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26/resolve/672fbf1b30579d6585301139bb363f42a0ad4a24/tokens.txt",
+        "size": 5048,
+        "sha256": "49e3c2646595fd907228b3c6787069658f67b17377c60aeb8619c4551b2316fb"
+      }
+    ]
+  }
+]

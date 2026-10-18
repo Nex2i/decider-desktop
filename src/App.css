@@ -411,3 +411,77 @@ h1 {
     transition: none;
   }
 }
+
+.speech-panel {
+  background: #fff;
+  border: 1px solid #dfe7d9;
+  border-radius: 12px;
+  padding: 22px;
+}
+.speech-panel .card-heading {
+  padding: 0;
+  margin-bottom: 20px;
+}
+.speech-panel h2 {
+  font-size: 15px;
+  margin: 0;
+}
+.speech-panel > label {
+  display: block;
+  font-size: 11px;
+  color: #65785c;
+  margin-bottom: 8px;
+}
+.speech-panel select {
+  font: inherit;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #dfe6d8;
+  border-radius: 7px;
+  color: #35513e;
+  background: #f8faf5;
+}
+.speech-panel select:focus-visible {
+  outline: 3px solid #98bb97;
+  outline-offset: 3px;
+}
+.model-description {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #7c8874;
+}
+.speech-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+.speech-panel .fine-print {
+  font-size: 10px;
+  color: #899582;
+  line-height: 1.7;
+  margin-bottom: 0;
+}
+.speech-panel progress {
+  width: 100%;
+  height: 8px;
+  margin-top: 17px;
+  accent-color: #365d47;
+}
+.live-transcript {
+  background: #f1f6eb;
+  border-radius: 7px;
+  padding: 15px;
+  margin-top: 18px;
+}
+.listening-label {
+  font-size: 11px;
+  color: #527147;
+}
+.live-transcript p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #35513e;
+  margin: 10px 0 0;
+}

@@ -1,3 +1,5 @@
+mod speech;
+
 use keyring::{Entry, Error as KeyringError};
 use serde::Serialize;
 
@@ -62,10 +64,17 @@ fn remove_jev_key() -> Result<(), String> {
 
 pub fn run() {
     tauri::Builder::default()
+        .manage(speech::SpeechState::default())
         .invoke_handler(tauri::generate_handler![
             app_status,
             save_jev_key,
-            remove_jev_key
+            remove_jev_key,
+            speech::list_models,
+            speech::download_model,
+            speech::cancel_model_download,
+            speech::remove_model,
+            speech::start_transcription,
+            speech::stop_transcription
         ])
         .run(tauri::generate_context!())
         .expect("error while running Decider Desktop");

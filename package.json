@@ -9,8 +9,11 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "check": "tsc --noEmit",
-    "format": "prettier --write src index.html package.json vite.config.ts tsconfig*.json src-tauri/*.json src-tauri/capabilities/*.json .github/workflows/*.yml README.md",
-    "format:check": "prettier --check src index.html package.json vite.config.ts tsconfig*.json src-tauri/*.json src-tauri/capabilities/*.json .github/workflows/*.yml README.md"
+    "format": "prettier --write src scripts index.html package.json vite.config.ts tsconfig*.json src-tauri/*.json src-tauri/capabilities/*.json .github/workflows/*.yml README.md",
+    "format:check": "prettier --check src scripts index.html package.json vite.config.ts tsconfig*.json src-tauri/*.json src-tauri/capabilities/*.json .github/workflows/*.yml README.md",
+    "version:set": "node scripts/version.mjs",
+    "check:versions": "node scripts/version.mjs --check",
+    "test": "node --test scripts/*.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",

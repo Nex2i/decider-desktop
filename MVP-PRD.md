@@ -1,9 +1,11 @@
 # Decider Desktop — MVP Product Requirements
 
-Status: Initial draft
+Status: MVP in progress
 Date: October 18, 2026
 Platforms: macOS and Windows
 Working name: Decider Desktop
+
+Implementation update (October 18, 2026): The app now offers a local streaming transcription test with downloadable Compact/int8 and Full precision English Zipformer profiles through sherpa-onnx. Microphone capture, partial/final transcript display, verified model downloads, cancellation, and app-managed model removal are implemented. JEV desktop actions and remote STT remain planned. Automatic CI runs checks; installer packaging and publishing require a manually dispatched version workflow.
 
 ## 1. Product summary
 

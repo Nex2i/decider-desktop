@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import "./App.css";
+import SpeechPanel from "./SpeechPanel";
 
 type AppStatus = {
   platform: string;
@@ -73,6 +74,10 @@ export default function App() {
       );
     }
   }
+
+  const appendTranscript = useCallback((text: string) => {
+    setDraft((existing) => (existing.trim() ? `${existing}\n\n${text}` : text));
+  }, []);
 
   const words = draft.trim() ? draft.trim().split(/\s+/).length : 0;
 
@@ -147,27 +152,17 @@ export default function App() {
                   Command
                 </button>
               </div>
-              <section className="capture-card" aria-label="Voice capture">
-                <div className="capture-icon" aria-hidden="true">
-                  {mode === "dictation" ? "∿" : "↗"}
-                </div>
-                <h2>
-                  {mode === "dictation"
-                    ? "Make room for your next thought"
-                    : "A shortcut, spoken"}
-                </h2>
-                <p>
-                  {mode === "dictation"
-                    ? "Your words will land in the text area below."
-                    : "Start with simple actions like “Open Safari” on Mac or “Open Notepad” on Windows."}
-                </p>
-                <button className="primary" disabled>
-                  Recording coming soon
-                </button>
-                <span className="capture-hint">
-                  Speech recognition and JEV routing are not connected yet.
-                </span>
-              </section>
+              {mode === "dictation" ? (
+                <SpeechPanel onTranscript={appendTranscript} />
+              ) : (
+                <section className="capture-card">
+                  <h2>Desktop commands are coming next</h2>
+                  <p>
+                    Switch to Dictation to download a local model and test your
+                    speech. JEV action routing is not connected yet.
+                  </p>
+                </section>
+              )}
               <section className="draft-card">
                 <div className="card-heading">
                   <label htmlFor="draft">Your text</label>
@@ -177,7 +172,7 @@ export default function App() {
                   id="draft"
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
-                  placeholder="A blank page for your next idea. You can type here while voice capture is being built."
+                  placeholder="Your finalized speech will appear here. You can also type, edit, and copy your text."
                 />
                 <div className="draft-footer">
                   <span>
@@ -297,15 +292,16 @@ export default function App() {
               <section className="settings-card">
                 <div className="card-heading">
                   <h2>Speech recognition</h2>
-                  <span>COMING NEXT</span>
+                  <span>LOCAL TEST AVAILABLE</span>
                 </div>
                 <p>
-                  Local model setup and a remote transcription option are
-                  planned. No audio is being recorded in this initial build.
+                  Open Workspace → Dictation to choose a local model, download
+                  it, and test live transcription. Remote transcription is
+                  planned.
                 </p>
                 <div className="provider-row">
                   <span>Local transcription</span>
-                  <span>Not installed</span>
+                  <span>Configure in Workspace</span>
                 </div>
                 <div className="provider-row">
                   <span>Remote transcription</span>
@@ -313,8 +309,8 @@ export default function App() {
                 </div>
               </section>
               <p className="privacy-note">
-                Local STT will keep audio on your device. Command mode will
-                still send transcripts to JEV.
+                Local speech tests keep audio on your device and do not call
+                JEV.
               </p>
             </>
           )}
