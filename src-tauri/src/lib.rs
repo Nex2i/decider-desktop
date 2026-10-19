@@ -1,3 +1,4 @@
+mod desktop;
 mod jev;
 mod qwen_tokenizer;
 mod speech;
@@ -48,7 +49,13 @@ fn validate_api_key(key: &str) -> Result<&str, String> {
 }
 
 #[tauri::command]
-fn app_status() -> Result<AppStatus, String> {
+async fn app_status() -> Result<AppStatus, String> {
+    tauri::async_runtime::spawn_blocking(read_app_status)
+        .await
+        .map_err(|_| "Could not read credential status. Please retry.".to_string())?
+}
+
+fn read_app_status() -> Result<AppStatus, String> {
     let configured = match credential_entry()?.get_password() {
         Ok(key) => !key.is_empty(),
         Err(KeyringError::NoEntry) => false,
@@ -62,7 +69,13 @@ fn app_status() -> Result<AppStatus, String> {
 }
 
 #[tauri::command]
-fn save_jev_key(api_key: String) -> Result<AppStatus, String> {
+async fn save_jev_key(api_key: String) -> Result<AppStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || save_key(api_key))
+        .await
+        .map_err(|_| "Could not save the key. Please retry.".to_string())?
+}
+
+fn save_key(api_key: String) -> Result<AppStatus, String> {
     let key = validate_api_key(&api_key)?;
     credential_entry()?
         .set_password(key)
@@ -81,7 +94,13 @@ fn save_jev_key(api_key: String) -> Result<AppStatus, String> {
 }
 
 #[tauri::command]
-fn remove_jev_key() -> Result<(), String> {
+async fn remove_jev_key() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(remove_key)
+        .await
+        .map_err(|_| "Could not remove the key. Please retry.".to_string())?
+}
+
+fn remove_key() -> Result<(), String> {
     match credential_entry()?.delete_credential() {
         Ok(()) | Err(KeyringError::NoEntry) => Ok(()),
         Err(error) => Err(credential_error("remove", error)),
@@ -91,11 +110,14 @@ fn remove_jev_key() -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .manage(speech::SpeechState::default())
+        .manage(desktop::DesktopState::default())
         .invoke_handler(tauri::generate_handler![
             app_status,
             save_jev_key,
             remove_jev_key,
             jev::test_jev_connection,
+            desktop::inspect_desktop,
+            desktop::request_desktop_access,
             speech::list_models,
             speech::download_model,
             speech::cancel_model_download,

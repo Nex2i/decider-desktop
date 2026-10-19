@@ -485,3 +485,75 @@ h1 {
   color: #35513e;
   margin: 10px 0 0;
 }
+.inspector-options select {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin: 8px 0 14px;
+  color: #35513e;
+  background: #f8faf5;
+  border: 1px solid #dfe6d8;
+  border-radius: 6px;
+  font: inherit;
+}
+.inspector-options > label,
+.action-inspector .checkbox-label {
+  font-size: 12px;
+  color: #527147;
+}
+.settings-card .checkbox-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  line-height: 1.6;
+}
+.settings-card .checkbox-label input {
+  width: auto;
+  flex: 0 0 auto;
+  margin-top: 3px;
+  accent-color: #365d47;
+}
+.action-inspector details,
+.capability-catalog details {
+  border-top: 1px solid #e2e8df;
+  padding: 14px 0;
+  font-size: 12px;
+  line-height: 1.7;
+}
+.action-inspector summary,
+.capability-catalog summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.action-inspector ul,
+.capability-catalog ul {
+  padding-left: 20px;
+}
+.action-inspector li {
+  overflow-wrap: anywhere;
+}
+.target-card {
+  padding: 15px;
+  margin: 12px 0;
+  background: #f6f9f2;
+  border: 1px solid #e2e8df;
+  border-radius: 7px;
+}
+.target-card h3 {
+  font-size: 13px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.target-card li,
+.target-card p {
+  font-size: 11px;
+}
+.target-card span,
+.app-inventory span {
+  color: #7c8874;
+  font-weight: 400;
+}
+.app-inventory {
+  max-height: 260px;
+  overflow-y: auto;
+}

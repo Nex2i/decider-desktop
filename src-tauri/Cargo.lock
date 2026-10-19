@@ -1211,8 +1211,10 @@ dependencies = [
 name = "decider-desktop"
 version = "0.1.0"
 dependencies = [
+ "core-foundation 0.10.1",
  "cpal",
  "keyring",
+ "objc2-app-kit",
  "qwen3-asr",
  "reqwest",
  "serde",
@@ -1221,6 +1223,7 @@ dependencies = [
  "sherpa-onnx",
  "tauri",
  "tauri-build",
+ "windows",
 ]
 
 [[package]]
@@ -3513,6 +3516,7 @@ checksum = "d49e936b501e5c5bf01fda3a9452ff86dc3ea98ad5f283e1455153142d97518c"
 dependencies = [
  "bitflags 2.13.2",
  "block2",
+ "libc",
  "objc2",
  "objc2-core-foundation",
  "objc2-foundation",

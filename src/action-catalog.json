@@ -1,0 +1,190 @@
+[
+  {
+    "category": "Applications",
+    "source": "Installed app inventory, running processes, app integrations",
+    "actions": [
+      "Launch installed app",
+      "Focus running app",
+      "Switch app",
+      "Hide app",
+      "Show app",
+      "Quit app",
+      "Restart app",
+      "Open app-specific deep link"
+    ]
+  },
+  {
+    "category": "Windows and workspaces",
+    "source": "Accessibility / UI Automation, window management APIs",
+    "actions": [
+      "Focus window",
+      "Open new window",
+      "Close window",
+      "Minimize window",
+      "Restore window",
+      "Maximize window",
+      "Enter or leave fullscreen",
+      "Move window",
+      "Resize window",
+      "Snap or tile window",
+      "Arrange windows",
+      "Change desktop or workspace",
+      "Move window to another display"
+    ]
+  },
+  {
+    "category": "Controls and menus",
+    "source": "Exposed native actions, writable attributes, UI Automation patterns",
+    "actions": [
+      "Invoke button or menu item",
+      "Open menu",
+      "Choose menu command",
+      "Focus control",
+      "Select item or tab",
+      "Add or remove selection",
+      "Toggle checkbox or switch",
+      "Expand or collapse control",
+      "Scroll",
+      "Scroll item into view",
+      "Set editable value",
+      "Set numeric range value",
+      "Change control view",
+      "Zoom control",
+      "Realize virtualized item",
+      "Dock control",
+      "Perform custom accessibility action",
+      "Set other writable accessibility attribute"
+    ]
+  },
+  {
+    "category": "Text and dictation",
+    "source": "Focused editable controls, explicit text selection, app integrations",
+    "actions": [
+      "Insert transcribed speech",
+      "Append text",
+      "Replace selected text",
+      "Select text",
+      "Select all",
+      "Copy selection",
+      "Cut selection",
+      "Paste",
+      "Undo",
+      "Redo",
+      "Find text",
+      "Replace text",
+      "Move caret"
+    ]
+  },
+  {
+    "category": "Pointer and keyboard",
+    "source": "Explicit native input integration; not inferred from a control label",
+    "actions": [
+      "Press key",
+      "Run keyboard shortcut",
+      "Type literal text",
+      "Move pointer",
+      "Click or double-click",
+      "Drag and drop",
+      "Scroll pointer target"
+    ]
+  },
+  {
+    "category": "Files and folders",
+    "source": "Native file APIs, file dialogs, file-manager integrations",
+    "actions": [
+      "Open file or folder",
+      "Reveal item in file manager",
+      "Create file",
+      "Create folder",
+      "Rename item",
+      "Copy item",
+      "Move item",
+      "Move item to Trash or Recycle Bin",
+      "Restore trashed item",
+      "Delete item permanently",
+      "Search files",
+      "Inspect file properties",
+      "Choose file in dialog"
+    ]
+  },
+  {
+    "category": "Browser",
+    "source": "Accessible browser controls, browser extension or documented browser integration",
+    "actions": [
+      "Navigate to URL",
+      "Open tab",
+      "Close tab",
+      "Switch tab",
+      "Go back",
+      "Go forward",
+      "Reload page",
+      "Find on page",
+      "Bookmark page",
+      "Download file",
+      "Choose upload file",
+      "Inspect page structure"
+    ]
+  },
+  {
+    "category": "Clipboard",
+    "source": "Explicit native clipboard integration",
+    "actions": [
+      "Read clipboard on request",
+      "Write clipboard",
+      "Paste clipboard into selected target",
+      "Clear clipboard"
+    ]
+  },
+  {
+    "category": "Media and device",
+    "source": "Documented OS or app integrations",
+    "actions": [
+      "Play or pause media",
+      "Next or previous track",
+      "Seek media",
+      "Change volume",
+      "Mute or unmute",
+      "Select audio input or output",
+      "Change display brightness",
+      "Select display layout",
+      "Take screenshot on request"
+    ]
+  },
+  {
+    "category": "System and settings",
+    "source": "Documented OS integrations and accessible Settings controls",
+    "actions": [
+      "Open settings page",
+      "Lock screen",
+      "Sleep device",
+      "Change appearance",
+      "Manage notification preference",
+      "Change network preference",
+      "Change Bluetooth preference",
+      "Inspect device status"
+    ]
+  },
+  {
+    "category": "App-specific and connected services",
+    "source": "Explicit integration, documented API, or registered workflow",
+    "actions": [
+      "Invoke app-specific menu command",
+      "Run registered shortcut or workflow",
+      "Invoke registered application command",
+      "Call connected service action"
+    ]
+  },
+  {
+    "category": "Decision and recovery",
+    "source": "Application policy and user interaction",
+    "actions": [
+      "Ask for clarification",
+      "Request required OS permission",
+      "Request action confirmation",
+      "Cancel pending operation",
+      "Refresh desktop context",
+      "Report unavailable action",
+      "Take no action"
+    ]
+  }
+]

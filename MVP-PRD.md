@@ -5,6 +5,8 @@ Date: October 18, 2026
 Platforms: macOS and Windows
 Working name: Decider Desktop
 
+Desktop discovery update (October 19, 2026): The Desktop actions view adds a read-only inventory of running apps, standard-location installed apps, and OS-exposed control capabilities, plus a 116-type implementation catalog. macOS uses accessibility action/writable-attribute enumeration; Windows uses standard UI Automation patterns. Coverage limits and permission gaps are explicit. Snapshots are local and labels are opt-in. This discovery layer does not execute actions or send desktop context to JEV yet. See [Desktop action catalog and discovery](DESKTOP-ACTIONS.md).
+
 Implementation update (October 18, 2026): The app now offers a local streaming transcription test with downloadable Zipformer profiles, Nemotron streaming, and native Qwen3-ASR streaming. Microphone capture, partial/final transcript display, verified model downloads, cancellation, and app-managed model removal are implemented. JEV keys use verified OS credential storage, and an explicit connection test checks authenticated JEV model access without inference or transcript uploads. JEV desktop actions and remote STT remain planned. Automatic CI runs checks; installer packaging and publishing require a manually dispatched version workflow.
 
 ## 1. Product summary

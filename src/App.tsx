@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import SpeechPanel from "./SpeechPanel";
+import DesktopActions from "./DesktopActions";
 
 type AppStatus = {
   platform: string;
@@ -11,7 +12,9 @@ type AppStatus = {
 type JevConnection = { model: string; checkedAt: number };
 
 export default function App() {
-  const [page, setPage] = useState<"workspace" | "settings">("workspace");
+  const [page, setPage] = useState<"workspace" | "actions" | "settings">(
+    "workspace",
+  );
   const [mode, setMode] = useState<"dictation" | "command">("dictation");
   const [draft, setDraft] = useState("");
   const [apiKey, setApiKey] = useState("");
@@ -124,6 +127,12 @@ export default function App() {
         <div className="nav-label">YOUR SPACE</div>
         <nav aria-label="Main navigation">
           <button
+            className={page === "actions" ? "nav-item active" : "nav-item"}
+            onClick={() => setPage("actions")}
+          >
+            <span aria-hidden="true">⌘</span> Desktop actions
+          </button>
+          <button
             className={page === "workspace" ? "nav-item active" : "nav-item"}
             onClick={() => setPage("workspace")}
           >
@@ -156,7 +165,9 @@ export default function App() {
           </span>
         </header>
         <div className="page-content">
-          {page === "workspace" ? (
+          {page === "actions" ? (
+            <DesktopActions />
+          ) : page === "workspace" ? (
             <>
               <div className="eyebrow">A LITTLE SPACE TO THINK</div>
               <h1>Say what’s on your mind.</h1>
