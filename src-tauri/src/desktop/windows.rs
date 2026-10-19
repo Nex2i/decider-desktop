@@ -9,7 +9,6 @@ use ::windows::Win32::System::Threading::{
 use ::windows::Win32::UI::Accessibility::*;
 use ::windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 use ::windows::core::{Interface, PWSTR};
-use std::collections::VecDeque;
 
 struct ComApartment;
 impl Drop for ComApartment {
@@ -57,6 +56,10 @@ pub fn inspect(target_pid: Option<u32>, include_labels: bool) -> Result<DesktopS
     let (installed, truncated) = installed_in_folders(&folders, "lnk");
     snapshot.installed_apps = installed;
     snapshot.truncated |= truncated;
+    snapshot.inventory_truncated = truncated;
+    if truncated {
+        snapshot.warn("The installed-app inventory reached its folder/entry limit. This limit is independent of the control scan.");
+    }
     snapshot.warn("Installed app inventory covers Start menu shortcuts. Portable executables and packaged apps without shortcuts may be missing.");
     unsafe {
         CoInitializeEx(None, COINIT_MULTITHREADED)
@@ -89,7 +92,7 @@ pub fn inspect(target_pid: Option<u32>, include_labels: bool) -> Result<DesktopS
         let mut top_level = 0;
         while let Some(window) = next {
             if !snapshot.has_budget() || top_level >= 512 {
-                snapshot.truncated = true;
+                snapshot.limit_controls();
                 break;
             }
             top_level += 1;
@@ -129,36 +132,35 @@ pub fn inspect(target_pid: Option<u32>, include_labels: bool) -> Result<DesktopS
         let selected: HashSet<_> = snapshot
             .apps
             .iter()
-            .filter(|app| target_pid.is_none_or(|pid| app.pid == pid))
+            .filter(|app| target_pid.map_or(app.pid != std::process::id(), |pid| app.pid == pid))
             .take(MAX_APPS)
             .map(|app| app.pid)
             .collect();
         if target_pid.is_none() && snapshot.apps.len() > MAX_APPS {
-            snapshot.truncated = true;
+            snapshot.limit_controls();
         }
+        let mut queue = DiscoveryQueue::new();
         for (index, (root, id, pid)) in roots.into_iter().enumerate() {
             if !selected.contains(&pid) {
                 continue;
             }
-            scan_window(&mut snapshot, &walker, root, &id, index);
-            if !snapshot.has_budget() {
-                break;
-            }
+            queue.push(&id, (root, id.clone(), format!("window/{index}"), 0));
         }
+        scan_windows(&mut snapshot, &walker, queue);
+    }
+    if target_pid.is_none() {
+        snapshot.warn("Desktop-wide scans omit Decider itself. Select Decider explicitly to inspect its controls.");
     }
     snapshot.warn("This is a snapshot of standard UI Automation capabilities. Elevated apps, secure desktop, custom controls, and hidden commands may be unavailable. No actions were executed.");
     Ok(snapshot)
 }
 
-fn scan_window(
+fn scan_windows(
     snapshot: &mut DesktopSnapshot,
     walker: &IUIAutomationTreeWalker,
-    root: IUIAutomationElement,
-    app_id: &str,
-    window: usize,
+    mut queue: DiscoveryQueue<(IUIAutomationElement, String, String, usize)>,
 ) {
-    let mut queue = VecDeque::from([(root, format!("window/{window}"), 0)]);
-    while let Some((element, path, depth)) = queue.pop_front() {
+    while let Some((element, app_id, path, depth)) = queue.pop() {
         if !snapshot.has_budget() {
             break;
         }
@@ -243,7 +245,7 @@ fn scan_window(
             if !capabilities.is_empty() {
                 snapshot.targets.push(DesktopTarget {
                     id: identifier(&format!("{}:{app_id}:{path}", snapshot.captured_at)),
-                    app_id: app_id.into(),
+                    app_id: app_id.clone(),
                     role: element
                         .CurrentLocalizedControlType()
                         .map(|value| text(&value.to_string()))
@@ -264,18 +266,21 @@ fn scan_window(
                 });
             }
             if depth >= MAX_DEPTH {
-                snapshot.truncated = true;
+                snapshot.limit_controls();
                 continue;
             }
             let mut next = walker.GetFirstChildElement(&element).ok();
             let mut index = 0;
             while let Some(child) = next {
                 if !snapshot.has_budget() || queue.len() + snapshot.nodes_visited >= MAX_NODES {
-                    snapshot.truncated = true;
+                    snapshot.limit_controls();
                     break;
                 }
                 next = walker.GetNextSiblingElement(&child).ok();
-                queue.push_back((child, format!("{path}/{index}"), depth + 1));
+                queue.push(
+                    &app_id,
+                    (child, app_id.clone(), format!("{path}/{index}"), depth + 1),
+                );
                 index += 1;
             }
         }

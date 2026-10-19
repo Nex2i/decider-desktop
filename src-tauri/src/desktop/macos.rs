@@ -7,7 +7,6 @@ use core_foundation::boolean::{CFBoolean, CFBooleanGetTypeID};
 use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
 use core_foundation::string::{CFString, CFStringGetTypeID, CFStringRef};
 use objc2_app_kit::{NSApplicationActivationPolicy, NSWorkspace};
-use std::collections::VecDeque;
 use std::ptr;
 
 // Only discovery APIs are linked. No AX action-performing or value-setting API
@@ -83,7 +82,7 @@ fn children(value: &Owned, limit: usize) -> (Vec<Owned>, bool) {
     (values, count > limit)
 }
 
-fn names(element: CFTypeRef, actions: bool) -> Vec<String> {
+fn names(element: CFTypeRef, actions: bool, snapshot: &mut DesktopSnapshot) -> Vec<String> {
     let mut array = ptr::null();
     let result = unsafe {
         if actions {
@@ -93,14 +92,15 @@ fn names(element: CFTypeRef, actions: bool) -> Vec<String> {
         }
     };
     if result != 0 || array.is_null() {
+        snapshot.warn("Some elements did not expose action or attribute information; this can be an app limitation or a read failure.");
         return vec![];
     }
     let owned = Owned(array.cast());
-    children(&owned, 256)
-        .0
-        .iter()
-        .filter_map(|value| string(value.0))
-        .collect()
+    let (values, truncated) = children(&owned, 256);
+    if truncated {
+        snapshot.limit_controls();
+    }
+    values.iter().filter_map(|value| string(value.0)).collect()
 }
 
 pub fn request_access() -> bool {
@@ -124,6 +124,10 @@ pub fn inspect(target_pid: Option<u32>, include_labels: bool) -> Result<DesktopS
     let (installed, truncated) = installed_in_folders(&folders, "app");
     snapshot.installed_apps = installed;
     snapshot.truncated |= truncated;
+    snapshot.inventory_truncated = truncated;
+    if truncated {
+        snapshot.warn("The installed-app inventory reached its folder/entry limit. This limit is independent of the control scan.");
+    }
     snapshot.warn("Installed app inventory covers standard Applications folders; portable apps in other folders may be missing.");
     let workspace = NSWorkspace::sharedWorkspace();
     for app in workspace.runningApplications().iter() {
@@ -167,38 +171,43 @@ pub fn inspect(target_pid: Option<u32>, include_labels: bool) -> Result<DesktopS
     let apps: Vec<_> = snapshot
         .apps
         .iter()
-        .filter(|app| target_pid.is_none_or(|pid| app.pid == pid))
+        .filter(|app| target_pid.map_or(app.pid != std::process::id(), |pid| app.pid == pid))
         .map(|app| (app.id.clone(), app.pid))
         .collect();
     if apps.len() > MAX_APPS {
-        snapshot.truncated = true;
+        snapshot.limit_controls();
     }
+    let mut queue = DiscoveryQueue::new();
     for (id, pid) in apps.into_iter().take(MAX_APPS) {
         if !snapshot.has_budget() {
             break;
         }
-        scan_app(&mut snapshot, &id, pid);
+        let root = unsafe { AXUIElementCreateApplication(pid as i32) };
+        if root.is_null() {
+            snapshot.warn("An app became unavailable during discovery.");
+            continue;
+        }
+        unsafe { AXUIElementSetMessagingTimeout(root, 0.08) };
+        queue.push(&id, (Owned(root), id.clone(), String::from("app"), 0));
+    }
+    scan_queue(&mut snapshot, queue);
+    if target_pid.is_none() {
+        snapshot.warn("Desktop-wide scans omit Decider itself to avoid inspecting the inspector's results. Select Decider explicitly to inspect its controls.");
     }
     snapshot.warn("This is a snapshot of OS-exposed capabilities, not a guarantee of execution. Hidden app commands, custom canvases, protected controls, and permission-restricted apps may be absent.");
     Ok(snapshot)
 }
 
-fn scan_app(snapshot: &mut DesktopSnapshot, app_id: &str, pid: u32) {
-    let root = unsafe { AXUIElementCreateApplication(pid as i32) };
-    if root.is_null() {
-        snapshot.warn("An app became unavailable during discovery.");
-        return;
-    }
-    let root = Owned(root);
-    // Bound each remote accessibility message, as well as the total scan.
-    unsafe { AXUIElementSetMessagingTimeout(root.0, 0.08) };
-    let mut queue = VecDeque::from([(root, String::from("app"), 0)]);
+fn scan_queue(
+    snapshot: &mut DesktopSnapshot,
+    mut queue: DiscoveryQueue<(Owned, String, String, usize)>,
+) {
     let mut seen = HashSet::new();
-    while let Some((element, path, depth)) = queue.pop_front() {
+    while let Some((element, app_id, path, depth)) = queue.pop() {
         if !snapshot.has_budget() {
             break;
         }
-        if !seen.insert(unsafe { CFHash(element.0) }) {
+        if !seen.insert((app_id.clone(), unsafe { CFHash(element.0) })) {
             continue;
         }
         snapshot.nodes_visited += 1;
@@ -212,7 +221,7 @@ fn scan_app(snapshot: &mut DesktopSnapshot, app_id: &str, pid: u32) {
         }
         let enabled = boolean_attribute(element.0, "AXEnabled");
         let focused = boolean_attribute(element.0, "AXFocused").unwrap_or(false);
-        let mut capabilities = names(element.0, true)
+        let mut capabilities = names(element.0, true, snapshot)
             .into_iter()
             .map(|name| Capability {
                 operation: name.strip_prefix("AX").unwrap_or(&name).into(),
@@ -222,7 +231,7 @@ fn scan_app(snapshot: &mut DesktopSnapshot, app_id: &str, pid: u32) {
             })
             .collect::<Vec<_>>();
         // Discover all writable attribute names, but never read their values.
-        for name in names(element.0, false) {
+        for name in names(element.0, false, snapshot) {
             if !snapshot.has_budget() {
                 break;
             }
@@ -253,7 +262,7 @@ fn scan_app(snapshot: &mut DesktopSnapshot, app_id: &str, pid: u32) {
                 .flatten();
             snapshot.targets.push(DesktopTarget {
                 id: identifier(&format!("{}:{app_id}:{path}", snapshot.captured_at)),
-                app_id: app_id.into(),
+                app_id: app_id.clone(),
                 role,
                 label,
                 enabled,
@@ -269,17 +278,29 @@ fn scan_app(snapshot: &mut DesktopSnapshot, app_id: &str, pid: u32) {
                 continue;
             };
             if depth >= MAX_DEPTH {
-                snapshot.truncated = true;
+                snapshot.limit_controls();
                 continue;
             }
             if attribute_name == "AXMenuBar" {
-                queue.push_back((value, format!("{path}/menu"), depth + 1));
+                queue.push(
+                    &app_id,
+                    (value, app_id.clone(), format!("{path}/menu"), depth + 1),
+                );
             } else {
                 let remaining = MAX_NODES.saturating_sub(snapshot.nodes_visited + queue.len());
                 let (values, truncated) = children(&value, remaining);
                 snapshot.truncated |= truncated;
+                snapshot.controls_truncated |= truncated;
                 for (index, child) in values.into_iter().enumerate() {
-                    queue.push_back((child, format!("{path}/{attribute_name}/{index}"), depth + 1));
+                    queue.push(
+                        &app_id,
+                        (
+                            child,
+                            app_id.clone(),
+                            format!("{path}/{attribute_name}/{index}"),
+                            depth + 1,
+                        ),
+                    );
                 }
             }
         }

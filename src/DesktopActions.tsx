@@ -27,6 +27,8 @@ type Snapshot = {
   targets: Target[];
   nodesVisited: number;
   truncated: boolean;
+  inventoryTruncated: boolean;
+  controlsTruncated: boolean;
   warnings: string[];
   executionAvailable: boolean;
 };
@@ -141,7 +143,7 @@ export default function DesktopActions() {
             disabled={busy || !desktop}
             onChange={(event) => setPid(event.target.value)}
           >
-            <option value="">All running apps</option>
+            <option value="">All other running apps</option>
             {snapshot?.apps.map((app) => (
               <option key={app.id} value={app.pid}>
                 {app.name}
@@ -228,9 +230,13 @@ export default function DesktopActions() {
               Captured{" "}
               {new Date(snapshot.capturedAt * 1000).toLocaleTimeString()} ·
               Labels {snapshot.labelsIncluded ? "included" : "excluded"} ·{" "}
-              {snapshot.truncated
-                ? "Partial scan: a discovery limit was reached. Select one app and scan again."
-                : "Scan finished within limits. App-exposed coverage can still be incomplete."}
+              {!snapshot.accessibilityAvailable
+                ? "Control scan needs Accessibility access. "
+                : snapshot.controlsTruncated
+                  ? "Control scan is partial. Select one app and scan again for more detail. "
+                  : "Control scan finished within limits. App-exposed coverage can still be incomplete. "}
+              {snapshot.inventoryTruncated &&
+                "Installed-app inventory also reached a folder/entry limit; see coverage details."}
             </p>
             <details>
               <summary>Coverage and permission details</summary>
@@ -316,7 +322,9 @@ export default function DesktopActions() {
                               ·{" "}
                               {capability.available
                                 ? "Available"
-                                : "Unavailable"}
+                                : target.enabled === null
+                                  ? "Availability unknown"
+                                  : "Unavailable"}
                             </span>
                           </li>
                         ))}

@@ -27,6 +27,47 @@ const MAX_APPS: usize = 40;
 const MAX_DEPTH: usize = 24;
 const SCAN_TIME: Duration = Duration::from_secs(12);
 
+/// Visit one element per app in turn, so a large UI cannot consume the entire
+/// desktop-wide budget before smaller apps get inspected.
+struct DiscoveryQueue<T> {
+    groups: std::collections::HashMap<String, usize>,
+    queues: Vec<std::collections::VecDeque<T>>,
+    cursor: usize,
+    pending: usize,
+}
+impl<T> DiscoveryQueue<T> {
+    fn new() -> Self {
+        Self {
+            groups: Default::default(),
+            queues: vec![],
+            cursor: 0,
+            pending: 0,
+        }
+    }
+    fn push(&mut self, group: &str, value: T) {
+        let index = *self.groups.entry(group.into()).or_insert_with(|| {
+            self.queues.push(Default::default());
+            self.queues.len() - 1
+        });
+        self.queues[index].push_back(value);
+        self.pending += 1;
+    }
+    fn pop(&mut self) -> Option<T> {
+        for _ in 0..self.queues.len() {
+            let index = self.cursor;
+            self.cursor = (self.cursor + 1) % self.queues.len();
+            if let Some(value) = self.queues[index].pop_front() {
+                self.pending -= 1;
+                return Some(value);
+            }
+        }
+        None
+    }
+    fn len(&self) -> usize {
+        self.pending
+    }
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopApp {
@@ -76,6 +117,8 @@ pub struct DesktopSnapshot {
     targets: Vec<DesktopTarget>,
     nodes_visited: usize,
     truncated: bool,
+    inventory_truncated: bool,
+    controls_truncated: bool,
     warnings: Vec<String>,
     execution_available: bool,
     #[serde(skip)]
@@ -97,6 +140,8 @@ impl DesktopSnapshot {
             targets: Vec::new(),
             nodes_visited: 0,
             truncated: false,
+            inventory_truncated: false,
+            controls_truncated: false,
             warnings: Vec::new(),
             execution_available: false,
             started: None,
@@ -108,9 +153,14 @@ impl DesktopSnapshot {
             && self.targets.len() < MAX_TARGETS
             && self.started.is_none_or(|start| start.elapsed() < SCAN_TIME);
         if !available {
-            self.truncated = true;
+            self.limit_controls();
         }
         available
+    }
+
+    fn limit_controls(&mut self) {
+        self.truncated = true;
+        self.controls_truncated = true;
     }
 
     fn warn(&mut self, warning: &str) {
@@ -280,5 +330,19 @@ mod tests {
                 .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn large_app_cannot_starve_other_apps() {
+        let mut queue = DiscoveryQueue::new();
+        queue.push("large", 1);
+        queue.push("large", 2);
+        queue.push("large", 3);
+        queue.push("small", 4);
+        assert_eq!(queue.pop(), Some(1));
+        queue.push("large", 5);
+        assert_eq!(queue.pop(), Some(4));
+        assert_eq!(queue.pop(), Some(2));
+        assert_eq!(queue.len(), 2);
     }
 }
