@@ -44,7 +44,11 @@ fn process_name(pid: u32) -> String {
     }
 }
 
-pub fn inspect(target_pid: Option<u32>, include_labels: bool) -> Result<DesktopSnapshot, String> {
+pub fn inspect(
+    target_pid: Option<u32>,
+    include_labels: bool,
+    inventory_only: bool,
+) -> Result<DesktopSnapshot, String> {
     let mut snapshot = DesktopSnapshot::new(include_labels);
     let folders: Vec<_> = ["APPDATA", "PROGRAMDATA"]
         .iter()
@@ -124,6 +128,9 @@ pub fn inspect(target_pid: Option<u32>, include_labels: bool) -> Result<DesktopS
         snapshot
             .apps
             .sort_by_key(|app| (!app.foreground, app.name.to_lowercase()));
+        if inventory_only {
+            return Ok(snapshot);
+        }
         if let Some(pid) = target_pid
             && !snapshot.apps.iter().any(|app| app.pid == pid)
         {
@@ -381,3 +388,310 @@ const PATTERNS: &[(i32, &str, &str, &str)] = &[
         "inspection",
     ),
 ];
+
+pub struct CommandContext;
+impl Drop for CommandContext {
+    fn drop(&mut self) {
+        unsafe { CoUninitialize() };
+    }
+}
+pub fn command_context() -> Result<CommandContext, String> {
+    unsafe {
+        CoInitializeEx(None, COINIT_MULTITHREADED)
+            .ok()
+            .map_err(|_| "Could not initialize Windows controls.")?;
+    }
+    Ok(CommandContext)
+}
+fn command_automation() -> Result<IUIAutomation, String> {
+    unsafe {
+        let automation: IUIAutomation2 =
+            CoCreateInstance(&CUIAutomation8, None, CLSCTX_INPROC_SERVER)
+                .map_err(|_| "Windows UI Automation is unavailable.")?;
+        automation
+            .SetConnectionTimeout(250)
+            .map_err(|_| "Could not set control time limits.")?;
+        automation
+            .SetTransactionTimeout(250)
+            .map_err(|_| "Could not set control time limits.")?;
+        automation
+            .cast()
+            .map_err(|_| "Windows UI Automation is unavailable.".into())
+    }
+}
+
+pub fn open_app(app: &crate::commands::AppCandidate) -> Result<(), String> {
+    use ::windows::Win32::UI::WindowsAndMessaging::{
+        IsIconic, SW_RESTORE, SW_SHOWNORMAL, SetForegroundWindow, ShowWindow,
+    };
+    if let Some(pid) = app.pid {
+        let automation = command_automation()?;
+        unsafe {
+            let desktop = automation
+                .GetRootElement()
+                .map_err(|_| "Could not inspect desktop windows.")?;
+            let walker = automation
+                .ControlViewWalker()
+                .map_err(|_| "Could not inspect desktop windows.")?;
+            let mut next = walker.GetFirstChildElement(&desktop).ok();
+            for _ in 0..512 {
+                let Some(window) = next else {
+                    break;
+                };
+                next = walker.GetNextSiblingElement(&window).ok();
+                if window.CurrentProcessId().ok() != Some(pid as i32) {
+                    continue;
+                }
+                if let Ok(handle) = window.CurrentNativeWindowHandle() {
+                    if IsIconic(handle).as_bool() {
+                        let _ = ShowWindow(handle, SW_RESTORE);
+                    }
+                    if SetForegroundWindow(handle).as_bool() {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        return Err("Windows could not activate the app. Open its window and try again.".into());
+    }
+    use ::windows::Win32::System::Com::{IPersistFile, STGM_READ};
+    use ::windows::Win32::UI::Shell::{IShellLinkW, ShellExecuteW, ShellLink};
+    use ::windows::core::{HSTRING, PCWSTR};
+    let path = app.path.as_ref().ok_or("The app has no launch target.")?;
+    if path
+        .extension()
+        .is_none_or(|ext| !ext.eq_ignore_ascii_case("lnk"))
+        || !path.is_file()
+    {
+        return Err("The app shortcut is no longer available.".into());
+    }
+    unsafe {
+        let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)
+            .map_err(|_| "Could not inspect the installed shortcut.")?;
+        let persist: IPersistFile = link
+            .cast()
+            .map_err(|_| "Could not inspect the installed shortcut.")?;
+        persist
+            .Load(&HSTRING::from(path.as_os_str()), STGM_READ)
+            .map_err(|_| "Could not read the installed shortcut.")?;
+        let mut buffer = [0u16; 32768];
+        link.GetPath(&mut buffer, std::ptr::null_mut(), 0)
+            .map_err(|_| "Could not resolve the application executable.")?;
+        let end = buffer.iter().position(|c| *c == 0).unwrap_or(buffer.len());
+        let target = std::path::PathBuf::from(String::from_utf16_lossy(&buffer[..end]));
+        let mut arguments = [0u16; 32768];
+        link.GetArguments(&mut arguments)
+            .map_err(|_| "Could not inspect shortcut arguments.")?;
+        if arguments[0] != 0
+            || !target.is_absolute()
+            || !target.is_file()
+            || target
+                .extension()
+                .is_none_or(|ext| !ext.eq_ignore_ascii_case("exe"))
+            || target.to_string_lossy().starts_with("\\\\")
+        {
+            return Err("This shortcut requires arguments or does not point to a local app executable. Open it manually; command launching supports plain app shortcuts.".into());
+        }
+        let target = HSTRING::from(target.as_os_str());
+        let result = ShellExecuteW(
+            None,
+            ::windows::core::w!("open"),
+            &target,
+            PCWSTR::null(),
+            PCWSTR::null(),
+            SW_SHOWNORMAL,
+        );
+        if result.0 as isize > 32 {
+            Ok(())
+        } else {
+            Err("Windows rejected the app launch request.".into())
+        }
+    }
+}
+
+pub struct Control {
+    pub description: String,
+    element: IUIAutomationElement,
+    pid: u32,
+    role: i32,
+    label: String,
+    operation: &'static str,
+}
+fn command_label(element: &IUIAutomationElement) -> String {
+    unsafe {
+        element
+            .CurrentName()
+            .map(|label| text(&label.to_string()))
+            .unwrap_or_default()
+    }
+}
+fn available(element: &IUIAutomationElement, pid: u32) -> bool {
+    unsafe {
+        element.CurrentProcessId().ok() == Some(pid as i32)
+            && element
+                .CurrentIsPassword()
+                .is_ok_and(|value| !value.as_bool())
+            && element
+                .CurrentIsEnabled()
+                .is_ok_and(|value| value.as_bool())
+            && element
+                .CurrentIsOffscreen()
+                .is_ok_and(|value| !value.as_bool())
+    }
+}
+
+pub fn command_controls(pid: u32) -> Result<(Vec<Control>, bool), String> {
+    let automation = command_automation()?;
+    let mut controls = Vec::new();
+    let mut queue = std::collections::VecDeque::new();
+    let started = Instant::now();
+    let mut visited = 0;
+    let mut truncated = false;
+    unsafe {
+        let walker = automation
+            .ControlViewWalker()
+            .map_err(|_| "Could not inspect app controls.")?;
+        let desktop = automation
+            .GetRootElement()
+            .map_err(|_| "Could not inspect desktop windows.")?;
+        let mut next = walker.GetFirstChildElement(&desktop).ok();
+        for _ in 0..512 {
+            let Some(window) = next else {
+                break;
+            };
+            next = walker.GetNextSiblingElement(&window).ok();
+            if window.CurrentProcessId().ok() == Some(pid as i32) {
+                queue.push_back((window, String::new(), 0));
+            }
+            if started.elapsed() >= Duration::from_secs(8) {
+                return Ok((controls, true));
+            }
+        }
+        while let Some((element, context, depth)) = queue.pop_front() {
+            if visited >= MAX_NODES
+                || controls.len() >= 250
+                || started.elapsed() >= Duration::from_secs(8)
+            {
+                return Ok((controls, true));
+            }
+            visited += 1;
+            if element
+                .CurrentIsPassword()
+                .map(|v| v.as_bool())
+                .unwrap_or(true)
+            {
+                continue;
+            }
+            let label = command_label(&element);
+            let role = element
+                .CurrentControlType()
+                .map(|value| value.0)
+                .unwrap_or_default();
+            if !label.is_empty() && available(&element, pid) {
+                let mut operations = Vec::new();
+                for (pattern, operation) in [
+                    (UIA_InvokePatternId, "Invoke"),
+                    (UIA_TogglePatternId, "Toggle"),
+                    (UIA_SelectionItemPatternId, "Select"),
+                    (UIA_ExpandCollapsePatternId, "Expand"),
+                    (UIA_ExpandCollapsePatternId, "Collapse"),
+                ] {
+                    if element.GetCurrentPattern(pattern).is_ok() {
+                        operations.push(operation);
+                    }
+                }
+                if element
+                    .CurrentIsKeyboardFocusable()
+                    .is_ok_and(|value| value.as_bool())
+                {
+                    operations.push("Focus");
+                }
+                for operation in operations {
+                    if controls.len() >= 250 {
+                        truncated = true;
+                        break;
+                    }
+                    controls.push(Control {
+                        description: format!(
+                            "{operation} ‘{label}’ ({}){context}",
+                            element
+                                .CurrentLocalizedControlType()
+                                .map(|value| text(&value.to_string()))
+                                .unwrap_or_default()
+                        ),
+                        element: element.clone(),
+                        pid,
+                        role,
+                        label: label.clone(),
+                        operation,
+                    });
+                }
+            }
+            if depth >= MAX_DEPTH {
+                truncated = true;
+                continue;
+            }
+            let context = if role == UIA_WindowControlTypeId.0 && !label.is_empty() {
+                format!(" in {}", text(&label))
+            } else {
+                context
+            };
+            let mut next = walker.GetFirstChildElement(&element).ok();
+            while let Some(child) = next {
+                if queue.len() + visited >= MAX_NODES || started.elapsed() >= Duration::from_secs(8)
+                {
+                    truncated = true;
+                    break;
+                }
+                next = walker.GetNextSiblingElement(&child).ok();
+                queue.push_back((child, context.clone(), depth + 1));
+            }
+        }
+    }
+    Ok((controls, truncated))
+}
+
+pub fn execute_control(control: &Control) -> Result<(), String> {
+    let element = &control.element;
+    if !available(element, control.pid)
+        || command_label(element) != control.label
+        || unsafe {
+            element
+                .CurrentControlType()
+                .map(|value| value.0)
+                .unwrap_or_default()
+        } != control.role
+    {
+        return Err(
+            "The control changed, closed, or became unavailable. Speak the command again.".into(),
+        );
+    }
+    let result = unsafe {
+        match control.operation {
+            "Invoke" => element
+                .GetCurrentPatternAs::<IUIAutomationInvokePattern>(UIA_InvokePatternId)
+                .and_then(|p| p.Invoke()),
+            "Toggle" => element
+                .GetCurrentPatternAs::<IUIAutomationTogglePattern>(UIA_TogglePatternId)
+                .and_then(|p| p.Toggle()),
+            "Select" => element
+                .GetCurrentPatternAs::<IUIAutomationSelectionItemPattern>(
+                    UIA_SelectionItemPatternId,
+                )
+                .and_then(|p| p.Select()),
+            "Expand" => element
+                .GetCurrentPatternAs::<IUIAutomationExpandCollapsePattern>(
+                    UIA_ExpandCollapsePatternId,
+                )
+                .and_then(|p| p.Expand()),
+            "Collapse" => element
+                .GetCurrentPatternAs::<IUIAutomationExpandCollapsePattern>(
+                    UIA_ExpandCollapsePatternId,
+                )
+                .and_then(|p| p.Collapse()),
+            "Focus" => element.SetFocus(),
+            _ => return Err("Unsupported control operation.".into()),
+        }
+    };
+    result.map_err(|_| "The app rejected the control action. Nothing else was attempted.".into())
+}

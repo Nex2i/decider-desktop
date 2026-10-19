@@ -284,8 +284,9 @@ export default function DesktopActions() {
             </label>
             <p className="fine-print">
               “Available” reflects reported enabled/visible state, not a tested
-              action. No desktop action executors are connected yet. Inspection
-              patterns are listed separately from actions.
+              action. This inspector never runs actions. Use Workspace → Command
+              for supported actions. Inspection patterns are listed separately
+              from actions.
             </p>
             <div className="discovered-targets">
               {matches
@@ -370,9 +371,10 @@ export default function DesktopActions() {
           </span>
         </div>
         <p>
-          This is the implementation map. These capabilities need executors and
-          permission checks before JEV can use them. A discovered menu command
-          may cover an app-specific action that is not named here.
+          This is the implementation map. Most capabilities still need executors
+          and permission checks. Command mode implements a small subset. A
+          discovered menu command may cover an app-specific action that is not
+          named here.
         </p>
         {catalog.map((group) => (
           <details key={group.category}>

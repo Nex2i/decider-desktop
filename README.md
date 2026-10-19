@@ -19,7 +19,7 @@ Implemented:
 - Native runtime/version status, restrictive content security policy, and no general-purpose shell or URL opener permissions.
 - Automatic macOS and Windows checks for frontend compilation, native tests, formatting, and linting. Installer packaging and GitHub release publishing run only through the manual New version workflow.
 
-Not implemented yet: remote STT, JEV inference/action routing, app discovery/launch, global shortcuts, tray/menu integration, and native unsaved-draft close protection. Saved keys remain marked unvalidated until Test connection succeeds. Command mode is a placeholder; local transcription does not invoke JEV.
+Not implemented yet: remote STT, global shortcuts, tray/menu integration, external text insertion, arbitrary keyboard/mouse actions, multi-step workflows, and native unsaved-draft close protection. Saved keys remain marked unvalidated until Test connection succeeds. Independent Dictation mode does not invoke JEV.
 
 ## Development
 
@@ -43,6 +43,20 @@ npm run desktop:dev
 Every model produces partial text while recording; Stop only flushes the last chunk and keeps the transcript. Audio is processed in memory on your device and is not saved or uploaded. No JEV key or internet connection is required after the model is installed. macOS and Windows microphone privacy settings must allow the app to use your input device. The browser preview cannot download or run the native speech engine.
 
 The model catalog is in `src-tauri/models.json`. It pins the published revisions and hashes for [Zipformer](https://huggingface.co/csukuangfj/sherpa-onnx-streaming-zipformer-en-2023-06-26) (Apache-2.0), [Nemotron](https://huggingface.co/csukuangfj2/sherpa-onnx-nemotron-3.5-asr-streaming-0.6b-560ms-int8-2026-06-11) (OpenMDW-1.1), and [Qwen3-ASR](https://huggingface.co/Qwen/Qwen3-ASR-0.6B) (Apache-2.0). The native runtime reads only these verified local files; its automatic model-hub downloader is disabled. The Qwen tokenizer reconstruction code preserves its upstream MIT notice.
+
+## Spoken desktop commands
+
+In **Workspace → Command**, use a downloaded speech model and your saved JEV key. Speak one action, then choose **Stop & run command**. Only the final transcript is classified; streaming partials never execute. You can also type a command and choose **Run command**.
+
+- **Open Safari**: JEV selects a known app; native code opens its inventoried bundle or activates its running process. On Windows, new launches support Start menu shortcuts to local `.exe` targets without arguments; other shortcuts must be opened manually.
+- **Type remember the milk** or **Dictate: remember the milk**: JEV selects draft dictation, then a deterministic parser appends the literal text to Decider's draft. It does not write into another app.
+- **Click Reload in Google Chrome**: enable **Allow JEV to read control labels in the app I name**, name the app and one control, then review the proposed app/control/operation and choose **Run selected action** within 30 seconds. Only supported, enabled named controls become candidates. macOS supports Press, ShowMenu, Raise and Focus; Windows supports Invoke, Toggle, Select, Expand, Collapse and Focus. Some controls and hidden menus are absent; open the relevant window or menu first.
+
+JEV receives the command and bounded app names. Opting into control commands additionally sends labels, roles, operations, and window/menu context for the selected app, which may reveal private document names. Audio, field values, passwords, clipboard contents, screenshots, local launch paths and the rest of the draft are not uploaded. The key stays in native credential storage. Command state and results stay in memory; there is no transcript/action history on disk.
+
+The native adapter uses TypeSafe's [typed Choice API](https://docs.typesafe.ai/api), with an explicit no-action choice, at most 251 candidates per question (including no-action), probability at least 0.80, confidence at least 0.70, and a 0.15 margin. App candidates are ranked by spoken name overlap before shortlisting; JEV still makes the selection. Partial control scans are reported. An absent/ambiguous choice, provider failure, invalid response, low confidence, cancellation, or expired approval executes nothing. No automatic HTTP retries occur. The provider returns only known IDs, never executable paths, scripts, action arguments, or generated text. Named native control references stay on one worker thread through classification/review and are rechecked before dispatch. A successful dispatch reports the OS/app accepted the request; it does not prove the resulting workflow completed.
+
+App opening and in-app dictation run directly. Other control operations require explicit review because a button/menu command can have consequences. This is a single-action controller, not an autonomous workflow engine; the broader capability catalog remains a roadmap. Switching away cancels a pending command, but an OS action already dispatched cannot be undone by cancellation. The read-only Desktop actions inspector remains independent.
 
 ## Browser preview
 

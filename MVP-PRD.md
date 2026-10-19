@@ -5,6 +5,8 @@ Date: October 18, 2026
 Platforms: macOS and Windows
 Working name: Decider Desktop
 
+Command routing update (October 19, 2026): Workspace → Command now connects finalized local speech (or typed commands) to JEV typed Choice classification. Known app opening/activation and literal in-app dictation run directly; a supported named native control is presented for explicit review with a 30-second expiry before dispatch. Control-label sharing is opt-in. No arbitrary model-generated code, paths, keyboard input, or multi-step workflows execute. A successful inference authenticates the saved key; separate Test connection remains available. Remote STT, external text insertion, global shortcuts, and the rest of the catalog remain planned. See README for supported operations and limits.
+
 Desktop discovery update (October 19, 2026): The Desktop actions view adds a read-only inventory of running apps, standard-location installed apps, and OS-exposed control capabilities, plus a 116-type implementation catalog. macOS uses accessibility action/writable-attribute enumeration; Windows uses standard UI Automation patterns. Coverage limits and permission gaps are explicit. Snapshots are local and labels are opt-in. This discovery layer does not execute actions or send desktop context to JEV yet. See [Desktop action catalog and discovery](DESKTOP-ACTIONS.md).
 
 Implementation update (October 18, 2026): The app now offers a local streaming transcription test with downloadable Zipformer profiles, Nemotron streaming, and native Qwen3-ASR streaming. Microphone capture, partial/final transcript display, verified model downloads, cancellation, and app-managed model removal are implemented. JEV keys use verified OS credential storage, and an explicit connection test checks authenticated JEV model access without inference or transcript uploads. JEV desktop actions and remote STT remain planned. Automatic CI runs checks; installer packaging and publishing require a manually dispatched version workflow.
@@ -38,13 +40,13 @@ The first release is a single-user, English-language product. It does not requir
 
 ## 4. Goals and success criteria
 
-| Goal | MVP release target |
-| --- | --- |
-| Correctly open an unambiguous installed app | At least 95% end-to-end success across 100 labeled launch utterances on each platform’s reference setup |
-| Capture useful dictated text | At most 10% word error rate on a fixed 50-utterance English sample in a quiet room; report results separately for each platform and STT mode |
-| Avoid incorrect actions | Zero incorrect executions across a separate 100-case suite of ambiguous, unsupported, silent, and noisy inputs; clarification or no action is acceptable |
-| Feel responsive | p95 of stop-recording to confirmed result at most 3 seconds for launch commands and dictation clips up to 15 seconds, with a warm local model or healthy remote connection |
-| Recover clearly | Every tested permission, model, connectivity, and execution failure produces a visible explanation and retry path |
+| Goal                                        | MVP release target                                                                                                                                                         |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Correctly open an unambiguous installed app | At least 95% end-to-end success across 100 labeled launch utterances on each platform’s reference setup                                                                    |
+| Capture useful dictated text                | At most 10% word error rate on a fixed 50-utterance English sample in a quiet room; report results separately for each platform and STT mode                               |
+| Avoid incorrect actions                     | Zero incorrect executions across a separate 100-case suite of ambiguous, unsupported, silent, and noisy inputs; clarification or no action is acceptable                   |
+| Feel responsive                             | p95 of stop-recording to confirmed result at most 3 seconds for launch commands and dictation clips up to 15 seconds, with a warm local model or healthy remote connection |
+| Recover clearly                             | Every tested permission, model, connectivity, and execution failure produces a visible explanation and retry path                                                          |
 
 Measure full workflow latency, including transcription and JEV. Track cold model startup and download time separately. Run all release criteria independently on macOS and Windows; an aggregate result must not hide a failing platform. These are validation targets, not claims about vendor performance.
 
@@ -161,24 +163,24 @@ JEV is a classification dependency, not an STT engine or text generator. No alte
 
 ## 9. Acceptance scenarios
 
-| Scenario | Expected result |
-| --- | --- |
-| “Open Safari” in Command mode, app installed and selection confident | Safari opens or activates once; status confirms the request |
-| “Open [unknown app]” | No launch; explain no installed match |
-| Two installed apps match the same spoken name | Show labeled choices; execute only the user’s selection |
-| “Delete my downloads” | Unsupported; no action |
-| “Open Safari” spoken in Dictation mode | Text area receives those words; no app launch |
-| “Type: Remember to book the tickets” in Command mode | Append “Remember to book the tickets” after successful routing and marker validation |
-| Dictate a second passage | Preserve the first passage and append a new paragraph |
-| Silence, noise, or an empty transcript | Show no-speech/retry feedback; no action |
-| JEV timeout, invalid choice, or low confidence | Error or clarification; no execution |
-| JEV API key is missing, invalid, or removed | Command mode is unavailable with setup guidance; configured Dictation mode remains usable |
-| JEV reports exhausted quota or a rate limit | Explain the provider error; no action executes and no unbounded retries occur |
-| Remote STT fails while local mode is available | Explain failure and offer an explicit mode switch |
-| User cancels while a request is pending | Stop capture/work where possible; ignore late results |
-| Shortcut is pressed repeatedly during processing | One interaction completes without duplicate text or launches |
-| Microphone access is denied | Explain how to enable it and allow retry |
-| Local model download is interrupted | Model remains unavailable; retry succeeds without loading a partial file |
+| Scenario                                                             | Expected result                                                                           |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| “Open Safari” in Command mode, app installed and selection confident | Safari opens or activates once; status confirms the request                               |
+| “Open [unknown app]”                                                 | No launch; explain no installed match                                                     |
+| Two installed apps match the same spoken name                        | Show labeled choices; execute only the user’s selection                                   |
+| “Delete my downloads”                                                | Unsupported; no action                                                                    |
+| “Open Safari” spoken in Dictation mode                               | Text area receives those words; no app launch                                             |
+| “Type: Remember to book the tickets” in Command mode                 | Append “Remember to book the tickets” after successful routing and marker validation      |
+| Dictate a second passage                                             | Preserve the first passage and append a new paragraph                                     |
+| Silence, noise, or an empty transcript                               | Show no-speech/retry feedback; no action                                                  |
+| JEV timeout, invalid choice, or low confidence                       | Error or clarification; no execution                                                      |
+| JEV API key is missing, invalid, or removed                          | Command mode is unavailable with setup guidance; configured Dictation mode remains usable |
+| JEV reports exhausted quota or a rate limit                          | Explain the provider error; no action executes and no unbounded retries occur             |
+| Remote STT fails while local mode is available                       | Explain failure and offer an explicit mode switch                                         |
+| User cancels while a request is pending                              | Stop capture/work where possible; ignore late results                                     |
+| Shortcut is pressed repeatedly during processing                     | One interaction completes without duplicate text or launches                              |
+| Microphone access is denied                                          | Explain how to enable it and allow retry                                                  |
+| Local model download is interrupted                                  | Model remains unavailable; retry succeeds without loading a partial file                  |
 
 ## 10. Delivery milestones
 
@@ -189,15 +191,15 @@ JEV is a classification dependency, not an STT engine or text generator. No alte
 
 ## 11. Risks and unresolved decisions
 
-| Risk / decision | Resolution before release |
-| --- | --- |
-| JEV access or API behavior differs from assumptions | Validate in milestone 1; do not substitute another model without a product decision |
-| Local model is too slow or too large | Benchmark on both reference machines, show requirements before download, and choose the supported configuration based on results |
-| Remote STT provider remains unspecified | Select one after validating streaming/batch behavior, privacy, credential handling, and cost; streaming partial transcripts are required |
-| Names and accents cause incorrect routing | Evaluate realistic utterances, tune aliases and thresholds, and require clarification when uncertain |
-| API expense or network latency hurts usability | Measure per-interaction usage and latency; avoid continuous inference and cap request timeouts/retries |
-| Command/dictation confusion | Keep mode visible and default the text capture flow to explicit Dictation mode |
-| Distribution affects model loading or shortcuts | Validate platform-specific signing/installers, macOS notarization, model storage, and shortcut behavior on clean macOS and Windows machines |
+| Risk / decision                                     | Resolution before release                                                                                                                   |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| JEV access or API behavior differs from assumptions | Validate in milestone 1; do not substitute another model without a product decision                                                         |
+| Local model is too slow or too large                | Benchmark on both reference machines, show requirements before download, and choose the supported configuration based on results            |
+| Remote STT provider remains unspecified             | Select one after validating streaming/batch behavior, privacy, credential handling, and cost; streaming partial transcripts are required    |
+| Names and accents cause incorrect routing           | Evaluate realistic utterances, tune aliases and thresholds, and require clarification when uncertain                                        |
+| API expense or network latency hurts usability      | Measure per-interaction usage and latency; avoid continuous inference and cap request timeouts/retries                                      |
+| Command/dictation confusion                         | Keep mode visible and default the text capture flow to explicit Dictation mode                                                              |
+| Distribution affects model loading or shortcuts     | Validate platform-specific signing/installers, macOS notarization, model storage, and shortcut behavior on clean macOS and Windows machines |
 
 ## 12. Explicitly out of scope
 

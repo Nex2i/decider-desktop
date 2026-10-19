@@ -1,3 +1,4 @@
+mod commands;
 mod desktop;
 mod jev;
 mod qwen_tokenizer;
@@ -111,8 +112,11 @@ pub fn run() {
     tauri::Builder::default()
         .manage(speech::SpeechState::default())
         .manage(desktop::DesktopState::default())
+        .manage(commands::CommandState::default())
         .invoke_handler(tauri::generate_handler![
             app_status,
+            commands::start_desktop_command,
+            commands::resolve_desktop_command,
             save_jev_key,
             remove_jev_key,
             jev::test_jev_connection,

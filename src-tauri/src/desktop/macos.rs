@@ -9,8 +9,8 @@ use core_foundation::string::{CFString, CFStringGetTypeID, CFStringRef};
 use objc2_app_kit::{NSApplicationActivationPolicy, NSWorkspace};
 use std::ptr;
 
-// Only discovery APIs are linked. No AX action-performing or value-setting API
-// is exposed by this adapter.
+// Discovery calls are separate from the command executor below. The inspector
+// never invokes the executor or changes accessibility values.
 #[link(name = "ApplicationServices", kind = "framework")]
 unsafe extern "C" {
     fn AXIsProcessTrusted() -> u8;
@@ -111,7 +111,11 @@ pub fn request_access() -> bool {
     unsafe { AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef()) != 0 }
 }
 
-pub fn inspect(target_pid: Option<u32>, include_labels: bool) -> Result<DesktopSnapshot, String> {
+pub fn inspect(
+    target_pid: Option<u32>,
+    include_labels: bool,
+    inventory_only: bool,
+) -> Result<DesktopSnapshot, String> {
     let mut snapshot = DesktopSnapshot::new(include_labels);
     let mut folders = vec![
         "/Applications".into(),
@@ -162,6 +166,9 @@ pub fn inspect(target_pid: Option<u32>, include_labels: bool) -> Result<DesktopS
     {
         return Err("That app has closed. Refresh the running app list.".into());
     }
+    if inventory_only {
+        return Ok(snapshot);
+    }
     snapshot.accessibility_available = unsafe { AXIsProcessTrusted() != 0 };
     if !snapshot.accessibility_available {
         snapshot.warn("Accessibility access is required to discover other apps' controls, menus, and writable attributes. Enable Decider Desktop in System Settings → Privacy & Security → Accessibility, then scan again.");
@@ -211,6 +218,7 @@ fn scan_queue(
             continue;
         }
         snapshot.nodes_visited += 1;
+        unsafe { AXUIElementSetMessagingTimeout(element.0, 0.08) };
         let Some(role) = string_attribute(element.0, "AXRole") else {
             snapshot.warn("Some accessibility elements could not be read; apps may have changed or denied access.");
             continue;
@@ -305,4 +313,236 @@ fn scan_queue(
             }
         }
     }
+}
+
+#[link(name = "CoreServices", kind = "framework")]
+unsafe extern "C" {
+    fn LSOpenCFURLRef(
+        url: core_foundation::url::CFURLRef,
+        launched: *mut core_foundation::url::CFURLRef,
+    ) -> i32;
+}
+#[link(name = "ApplicationServices", kind = "framework")]
+unsafe extern "C" {
+    fn AXUIElementPerformAction(element: CFTypeRef, action: CFStringRef) -> i32;
+    fn AXUIElementSetAttributeValue(
+        element: CFTypeRef,
+        attribute: CFStringRef,
+        value: CFTypeRef,
+    ) -> i32;
+    fn AXUIElementGetPid(element: CFTypeRef, pid: *mut i32) -> i32;
+}
+
+pub fn open_app(app: &crate::commands::AppCandidate) -> Result<(), String> {
+    if let Some(pid) = app.pid {
+        let running = objc2_app_kit::NSRunningApplication::runningApplicationWithProcessIdentifier(
+            pid as i32,
+        )
+        .ok_or("The selected app has closed. Speak the command again.")?;
+        #[allow(deprecated)]
+        let activated = running.activateWithOptions(
+            objc2_app_kit::NSApplicationActivationOptions::ActivateIgnoringOtherApps,
+        );
+        return if activated {
+            Ok(())
+        } else {
+            Err("macOS could not activate the app.".into())
+        };
+    }
+    let path = app.path.as_ref().ok_or("The app has no launch target.")?;
+    let metadata =
+        std::fs::symlink_metadata(path).map_err(|_| "The installed app is no longer available.")?;
+    if !metadata.is_dir()
+        || metadata.file_type().is_symlink()
+        || path.extension().is_none_or(|ext| ext != "app")
+    {
+        return Err("The selected target is not an application bundle.".into());
+    }
+    let url = core_foundation::url::CFURL::from_path(path, true)
+        .ok_or("Could not resolve the app bundle.")?;
+    if unsafe { LSOpenCFURLRef(url.as_concrete_TypeRef(), ptr::null_mut()) } == 0 {
+        Ok(())
+    } else {
+        Err("macOS rejected the app launch request.".into())
+    }
+}
+
+pub struct Control {
+    pub description: String,
+    element: Owned,
+    pid: u32,
+    role: String,
+    label: String,
+    operation: &'static str,
+}
+fn control_label(element: CFTypeRef) -> String {
+    string_attribute(element, "AXTitle")
+        .filter(|label| !label.is_empty())
+        .or_else(|| string_attribute(element, "AXDescription"))
+        .map(|label| text(&label))
+        .unwrap_or_default()
+}
+
+pub fn command_controls(pid: u32) -> Result<(Vec<Control>, bool), String> {
+    if unsafe { AXIsProcessTrusted() } == 0 {
+        return Err("Grant Decider access in macOS Privacy & Security → Device Control and Data Access, then retry.".into());
+    }
+    let root = unsafe { AXUIElementCreateApplication(pid as i32) };
+    if root.is_null() {
+        return Err("The app is no longer available.".into());
+    }
+    unsafe { AXUIElementSetMessagingTimeout(root, 0.08) };
+    let mut queue = std::collections::VecDeque::from([(Owned(root), String::new(), 0)]);
+    let mut seen = HashSet::new();
+    let mut snapshot = DesktopSnapshot::new(true);
+    snapshot.started = Some(Instant::now());
+    let mut controls = Vec::new();
+    while let Some((element, context, depth)) = queue.pop_front() {
+        if snapshot.nodes_visited >= MAX_NODES
+            || controls.len() >= 250
+            || snapshot
+                .started
+                .is_some_and(|start| start.elapsed() >= Duration::from_secs(8))
+        {
+            return Ok((controls, true));
+        }
+        if !seen.insert(unsafe { CFHash(element.0) }) {
+            continue;
+        }
+        snapshot.nodes_visited += 1;
+        unsafe { AXUIElementSetMessagingTimeout(element.0, 0.08) };
+        let Some(role) = string_attribute(element.0, "AXRole") else {
+            continue;
+        };
+        if role.contains("Secure")
+            || string_attribute(element.0, "AXSubrole").is_some_and(|role| role.contains("Secure"))
+            || boolean_attribute(element.0, "AXHidden") == Some(true)
+        {
+            continue;
+        }
+        let label = control_label(element.0);
+        if boolean_attribute(element.0, "AXEnabled") == Some(true) && !label.is_empty() {
+            let actions = names(element.0, true, &mut snapshot);
+            for operation in ["AXPress", "AXShowMenu", "AXRaise", "AXFocused"] {
+                let supported = if operation == "AXFocused" {
+                    let name = CFString::new(operation);
+                    let mut writable = 0;
+                    unsafe {
+                        AXUIElementIsAttributeSettable(
+                            element.0,
+                            name.as_concrete_TypeRef(),
+                            &mut writable,
+                        ) == 0
+                            && writable != 0
+                    }
+                } else {
+                    actions.iter().any(|name| name == operation)
+                };
+                if supported && controls.len() < 250 {
+                    controls.push(Control {
+                        description: format!(
+                            "{} ‘{}’ ({role}){}",
+                            if operation == "AXFocused" {
+                                "Focus"
+                            } else {
+                                operation.strip_prefix("AX").unwrap_or(operation)
+                            },
+                            label,
+                            if context.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" in {context}")
+                            }
+                        ),
+                        element: Owned(unsafe { CFRetain(element.0) }),
+                        pid,
+                        role: role.clone(),
+                        label: label.clone(),
+                        operation,
+                    });
+                }
+            }
+        }
+        if depth >= MAX_DEPTH {
+            snapshot.limit_controls();
+            continue;
+        }
+        let child_context = if ["AXWindow", "AXMenuBarItem", "AXMenuItem"].contains(&role.as_str())
+            && !label.is_empty()
+        {
+            text(&format!("{context} / {label}"))
+        } else {
+            context
+        };
+        for name in ["AXChildren", "AXWindows", "AXMenuBar"] {
+            if let Some(value) = attribute(element.0, name) {
+                if name == "AXMenuBar" {
+                    queue.push_back((value, child_context.clone(), depth + 1));
+                } else {
+                    let remaining = MAX_NODES.saturating_sub(snapshot.nodes_visited + queue.len());
+                    let (items, partial) = children(&value, remaining);
+                    snapshot.controls_truncated |= partial;
+                    for child in items {
+                        queue.push_back((child, child_context.clone(), depth + 1));
+                    }
+                }
+            }
+        }
+    }
+    Ok((controls, snapshot.controls_truncated))
+}
+
+pub fn execute_control(control: &Control) -> Result<(), String> {
+    let element = control.element.0;
+    let mut pid = 0;
+    if unsafe { AXIsProcessTrusted() } == 0
+        || unsafe { AXUIElementGetPid(element, &mut pid) } != 0
+        || pid as u32 != control.pid
+        || string_attribute(element, "AXRole").as_deref() != Some(control.role.as_str())
+        || control_label(element) != control.label
+        || boolean_attribute(element, "AXEnabled") != Some(true)
+        || boolean_attribute(element, "AXHidden") == Some(true)
+        || string_attribute(element, "AXSubrole").is_some_and(|role| role.contains("Secure"))
+    {
+        return Err(
+            "The control changed, closed, or lost permission. Speak the command again.".into(),
+        );
+    }
+    let name = CFString::new(control.operation);
+    let status = if control.operation == "AXFocused" {
+        let mut writable = 0;
+        if unsafe {
+            AXUIElementIsAttributeSettable(element, name.as_concrete_TypeRef(), &mut writable)
+        } != 0
+            || writable == 0
+        {
+            return Err("The control can no longer receive focus.".into());
+        }
+        unsafe {
+            AXUIElementSetAttributeValue(
+                element,
+                name.as_concrete_TypeRef(),
+                CFBoolean::true_value().as_CFTypeRef(),
+            )
+        }
+    } else {
+        let mut snapshot = DesktopSnapshot::new(false);
+        if !names(element, true, &mut snapshot)
+            .iter()
+            .any(|action| action == control.operation)
+        {
+            return Err("The selected operation is no longer supported.".into());
+        }
+        unsafe { AXUIElementPerformAction(element, name.as_concrete_TypeRef()) }
+    };
+    if status == 0 {
+        Ok(())
+    } else {
+        Err("The app rejected the control action. Nothing else was attempted.".into())
+    }
+}
+
+pub struct CommandContext;
+pub fn command_context() -> Result<CommandContext, String> {
+    Ok(CommandContext)
 }

@@ -557,3 +557,25 @@ h1 {
   max-height: 260px;
   overflow-y: auto;
 }
+
+.command-panel textarea {
+  width: 100%;
+  min-height: 90px;
+  padding: 12px;
+  border: 1px solid var(--border, #deded8);
+  border-radius: 10px;
+  resize: vertical;
+  font: inherit;
+  box-sizing: border-box;
+  margin: 8px 0 12px;
+}
+.command-consent {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+.command-consent input {
+  width: auto;
+  margin: 0;
+}

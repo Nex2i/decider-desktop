@@ -3,6 +3,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import SpeechPanel from "./SpeechPanel";
 import DesktopActions from "./DesktopActions";
+import CommandPanel from "./CommandPanel";
 
 type AppStatus = {
   platform: string;
@@ -197,13 +198,10 @@ export default function App() {
               {mode === "dictation" ? (
                 <SpeechPanel onTranscript={appendTranscript} />
               ) : (
-                <section className="capture-card">
-                  <h2>Desktop commands are coming next</h2>
-                  <p>
-                    Switch to Dictation to download a local model and test your
-                    speech. JEV action routing is not connected yet.
-                  </p>
-                </section>
+                <CommandPanel
+                  keyConfigured={!!status?.jevKeyConfigured}
+                  onDictation={appendTranscript}
+                />
               )}
               <section className="draft-card">
                 <div className="card-heading">
@@ -269,7 +267,7 @@ export default function App() {
                 <p>
                   Use your own TypeSafe JEV API key. Usage is billed to your
                   provider account. Test your saved key to check JEV access.
-                  Desktop command routing is coming next.
+                  Command mode uses JEV to choose supported desktop actions.
                 </p>
                 <label htmlFor="api-key">
                   {status?.jevKeyConfigured ? "Replace API key" : "API key"}

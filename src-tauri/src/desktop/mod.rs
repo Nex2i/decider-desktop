@@ -17,9 +17,9 @@ impl Drop for ScanLease {
 }
 
 #[cfg(target_os = "macos")]
-mod macos;
+pub(crate) mod macos;
 #[cfg(target_os = "windows")]
-mod windows;
+pub(crate) mod windows;
 
 const MAX_NODES: usize = 3000;
 const MAX_TARGETS: usize = 1500;
@@ -79,6 +79,8 @@ pub struct DesktopApp {
 
 #[derive(Serialize)]
 pub struct InstalledApp {
+    #[serde(skip)]
+    pub(crate) path: std::path::PathBuf,
     id: String,
     name: String,
     source: String,
@@ -220,6 +222,7 @@ fn installed_in_folders(
                 if seen.insert(key.to_lowercase()) {
                     result.push(InstalledApp {
                         id: identifier(&key),
+                        path: path.clone(),
                         name: text(&path.file_stem().unwrap_or_default().to_string_lossy()),
                         source: if extension == "app" {
                             "Application bundle"
@@ -255,11 +258,11 @@ pub async fn inspect_desktop(
         let _lease = lease;
         #[cfg(target_os = "macos")]
         {
-            macos::inspect(target_pid, include_labels)
+            macos::inspect(target_pid, include_labels, false)
         }
         #[cfg(target_os = "windows")]
         {
-            windows::inspect(target_pid, include_labels)
+            windows::inspect(target_pid, include_labels, false)
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
@@ -345,4 +348,35 @@ mod tests {
         assert_eq!(queue.pop(), Some(2));
         assert_eq!(queue.len(), 2);
     }
+}
+
+#[cfg(target_os = "macos")]
+pub(crate) use macos as command_native;
+#[cfg(target_os = "windows")]
+pub(crate) use windows as command_native;
+
+pub(crate) fn command_apps(snapshot: DesktopSnapshot) -> Vec<crate::commands::AppCandidate> {
+    let mut apps: Vec<_> = snapshot
+        .apps
+        .into_iter()
+        .filter(|app| app.pid != std::process::id())
+        .map(|app| crate::commands::AppCandidate {
+            name: app.name,
+            pid: Some(app.pid),
+            path: None,
+        })
+        .collect();
+    for installed in snapshot.installed_apps {
+        if !apps
+            .iter()
+            .any(|app| app.name.eq_ignore_ascii_case(&installed.name))
+        {
+            apps.push(crate::commands::AppCandidate {
+                name: installed.name,
+                pid: None,
+                path: Some(installed.path),
+            });
+        }
+    }
+    apps
 }

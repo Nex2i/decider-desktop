@@ -42,8 +42,14 @@ const message = (error: unknown) =>
 
 export default function SpeechPanel({
   onTranscript,
+  commandMode = false,
+  disabled = false,
+  onActiveChange,
 }: {
   onTranscript: (text: string) => void;
+  commandMode?: boolean;
+  disabled?: boolean;
+  onActiveChange?: (active: boolean) => void;
 }) {
   const desktop = isTauri();
   const [models, setModels] = useState<ModelInfo[]>(previewModels);
@@ -63,10 +69,17 @@ export default function SpeechPanel({
   const stopping = useRef(false);
   const mounted = useRef(false);
   const downloadActive = useRef(false);
+  const finalSent = useRef(false);
+  const commandModeRef = useRef(commandMode);
+  commandModeRef.current = commandMode;
   const callback = useRef(onTranscript);
   callback.current = onTranscript;
   const selected = models.find((model) => model.id === modelId)!;
   const active = phase !== "idle";
+
+  useEffect(() => {
+    onActiveChange?.(active);
+  }, [active, onActiveChange]);
 
   async function refreshModels() {
     const result = await invoke<ModelInfo[]>("list_models");
@@ -96,11 +109,14 @@ export default function SpeechPanel({
             payload.message ?? "Speech recognition failed. Please retry.",
           );
         } else if (payload.phase === "final") {
-          if (!canceled.current) {
+          if (!canceled.current && !finalSent.current) {
+            finalSent.current = true;
             if (payload.text.trim()) {
               callback.current(payload.text.trim());
               setNotice(
-                "Transcript added to your text. Nothing was sent to JEV.",
+                commandModeRef.current
+                  ? "Command transcribed. Choosing an action with JEV."
+                  : "Transcript added to your text. Nothing was sent to JEV.",
               );
             } else
               setNotice(
@@ -222,6 +238,8 @@ export default function SpeechPanel({
   }
 
   async function start() {
+    if (disabled) return;
+    finalSent.current = false;
     setError("");
     setNotice("");
     setLiveText("");
@@ -263,9 +281,12 @@ export default function SpeechPanel({
       ? Math.min(100, Math.floor((progress.downloaded / progress.total) * 100))
       : 0;
   return (
-    <section className="speech-panel" aria-label="Local speech test">
+    <section
+      className="speech-panel"
+      aria-label={commandMode ? "Speak a desktop command" : "Local speech test"}
+    >
       <div className="card-heading">
-        <h2>Local speech test</h2>
+        <h2>{commandMode ? "Record your command" : "Local speech test"}</h2>
         <span>ON YOUR DEVICE</span>
       </div>
       <label htmlFor="speech-model">Speech model</label>
@@ -303,7 +324,14 @@ export default function SpeechPanel({
           <>
             <button
               className="primary"
-              disabled={!desktop || !ready || active || downloading || removing}
+              disabled={
+                disabled ||
+                !desktop ||
+                !ready ||
+                active ||
+                downloading ||
+                removing
+              }
               onClick={() => void start()}
             >
               Start recording
@@ -339,7 +367,7 @@ export default function SpeechPanel({
               disabled={phase === "finalizing"}
               onClick={() => void stop(false)}
             >
-              Stop & keep text
+              {commandMode ? "Stop & run command" : "Stop & keep text"}
             </button>
             <button className="text-button" onClick={() => void stop(true)}>
               Cancel
@@ -371,7 +399,7 @@ export default function SpeechPanel({
       )}
       <p className="fine-print">
         {desktop
-          ? `Live transcription only. Uses your default microphone and stops after ${selected.maxRecordingSeconds} seconds. Stop keeps the live transcript below; Escape cancels.`
+          ? `Live transcription only. Uses your default microphone and stops after ${selected.maxRecordingSeconds} seconds. ${commandMode ? "Stop sends the final command to JEV; Escape cancels." : "Stop keeps the live transcript below; Escape cancels."}`
           : "Open the desktop app to download models and use your microphone. The browser preview cannot run the native speech engine."}
       </p>
       {error && (

@@ -20,11 +20,11 @@ macOS control discovery requires Accessibility access for Decider Desktop. The a
 - Results distinguish control-scan limits from installed-inventory limits and report permission/read gaps. Select one app and rescan when the desktop-wide control scan is partial. Selecting an app does not change installed-inventory coverage. An untruncated scan still covers only what apps expose; it cannot prove that all functionality has been found.
 - Control labels/window titles are excluded by default and require an explicit checkbox. Editable field values, selected text, clipboard contents, document contents, screenshots, and password controls are not collected. Opted-in labels can still contain private information.
 - Snapshots stay in memory for the current inspector view. Copying exports them to the clipboard on request. Local filesystem paths are replaced with opaque installed-app IDs.
-- IDs identify discovery records, not executable handles. Context can change immediately after capture. This implementation has no desktop action executor.
+- IDs identify discovery records, not executable handles. Context can change immediately after capture. The inspector itself has no execution interface. Workspace → Command uses a separate, bounded native executor and fresh retained control references.
 
 ## Implementation map
 
-All entries below require a purpose-built executor and target/permission checks before they can become JEV choices. Some can be discovered through the native inspector; others need documented OS APIs, explicit app integrations, or registered workflows. A read-only inspection pattern is context, not a desktop-changing command.
+Most entries below still require a purpose-built executor and target/permission checks before they can become JEV choices. Command mode currently implements app opening/activation, literal in-app draft dictation, and reviewed named-control actions (macOS Press/ShowMenu/Raise/Focus; Windows Invoke/Toggle/Select/Expand/Collapse/Focus). Some can be discovered through the native inspector; others need documented OS APIs, explicit app integrations, or registered workflows. A read-only inspection pattern is context, not a desktop-changing command.
 
 ### Applications
 
