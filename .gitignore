@@ -31,3 +31,10 @@ src-tauri/gen/
 !.env.example
 *.pem
 *.key
+
+# Apple signing credentials must never enter source control
+*.p12
+*.pfx
+*.p8
+*.cer
+*.certSigningRequest

@@ -22,6 +22,21 @@ jobs:
       - uses: actions/setup-node@v7.1.0
         with:
           node-version-file: .nvmrc
+      - name: Require Apple release signing configuration
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          node --input-type=module <<'JS'
+          const required = ['APPLE_CERTIFICATE', 'APPLE_CERTIFICATE_PASSWORD', 'APPLE_SIGNING_IDENTITY', 'APPLE_ID', 'APPLE_PASSWORD', 'APPLE_TEAM_ID'];
+          const missing = required.filter(name => !process.env[name]?.trim());
+          if (missing.length) throw new Error(`Missing release secrets: ${missing.join(', ')}. See MACOS-SIGNING.md.`);
+          if (process.env.APPLE_SIGNING_IDENTITY === '-') throw new Error('Ad-hoc signing is not allowed for releases.');
+          JS
       - name: Validate requested version and source
         id: version
         env:
@@ -77,7 +92,49 @@ jobs:
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
       - run: cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings
-      - run: npm run tauri build -- --bundles ${{ matrix.bundle }} -- --locked
+      - name: Import Apple signing certificate into temporary keychain
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          CERTIFICATE_PATH="$RUNNER_TEMP/decider-signing.p12"
+          SIGNING_KEYCHAIN="$RUNNER_TEMP/decider-signing.keychain-db"
+          trap 'rm -f "$CERTIFICATE_PATH"' EXIT
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 32)
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          node --input-type=module <<'JS'
+          import { writeFileSync } from 'node:fs';
+          writeFileSync(`${process.env.RUNNER_TEMP}/decider-signing.p12`, Buffer.from(process.env.APPLE_CERTIFICATE, 'base64'), { mode: 0o600 });
+          JS
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$SIGNING_KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$SIGNING_KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$SIGNING_KEYCHAIN"
+          security import "$CERTIFICATE_PATH" -k "$SIGNING_KEYCHAIN" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign > /dev/null
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$SIGNING_KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$SIGNING_KEYCHAIN"
+      - name: Build and verify signed, notarized macOS installer
+        if: runner.os == 'macOS'
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run build:macos -- --release
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: npm run tauri build -- --bundles nsis -- --locked
+      - name: Remove temporary signing keychain
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/decider-signing.keychain-db" ]; then
+            security delete-keychain "$RUNNER_TEMP/decider-signing.keychain-db"
+          fi
+          rm -f "$RUNNER_TEMP/decider-signing.p12"
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: ${{ matrix.artifact }}
@@ -109,4 +166,4 @@ jobs:
           test "${#assets[@]}" -eq 2 || { echo "Expected one installer for each platform."; exit 1; }
           gh release create "v$VERSION" "${assets[@]}" \
             --target "$COMMIT" --title "Decider Desktop $VERSION" \
-            --notes "Manually requested development build for macOS (Apple Silicon) and Windows (x64). Installers are not signed/notarized for public distribution yet. Models download separately inside the app."
+            --notes "Manually requested build for macOS (Apple Silicon, Apple Developer ID signed and notarized) and Windows (x64, unsigned). Models download separately inside the app."

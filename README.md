@@ -29,7 +29,7 @@ If you use nvm, run `nvm install` and `nvm use` in this directory first. npm rej
 
 ```sh
 npm ci
-npm run tauri dev
+npm run desktop:dev
 ```
 
 ## Test your speech
@@ -62,7 +62,7 @@ cargo clippy --manifest-path src-tauri/Cargo.toml --locked -- -D warnings
 npm run tauri build -- --no-bundle
 ```
 
-Native builds must be validated on each target OS. sherpa-onnx downloads its platform-specific static native libraries during the first Rust build. Windows builds use the static CRT to match those libraries. macOS bundles use ad-hoc signing for local development so the complete app has a valid signature for Keychain access. Reopen the app after rebuilding it; macOS may request Keychain approval again. Developer ID signing and macOS notarization are not configured yet. A production signing identity can be supplied through `APPLE_SIGNING_IDENTITY`.
+Native builds must be validated on each target OS. sherpa-onnx downloads its platform-specific static native libraries during the first Rust build. Windows builds use the static CRT to match those libraries. For macOS testing that uses Accessibility or Keychain, use `npm run signing:check` and `npm run build:macos`. These require a valid Apple signing certificate and refuse ad-hoc fallback, then verify the app signature and stable identity. Use `npm run desktop:dev` for a separate debug app identity. The low-level Tauri command still supports ad-hoc builds, whose privacy grants may be invalidated on rebuild. See [macOS signing setup](MACOS-SIGNING.md) for Xcode certificate setup, local builds, and GitHub secrets.
 
 ## Manual versions and releases
 
@@ -77,7 +77,7 @@ npm run check:versions
 
 Commit and push the version files to `main`, then choose **Actions → New version (manual) → Run workflow**, enter the committed version (for example `0.2.0`), and run it on `main`. This is the only release trigger; tags and ordinary pushes do not publish anything. The workflow validates consistent versions, refuses existing version tags/releases, builds both platforms, and publishes a GitHub release only after both packages succeed. It pins both packages to the same source commit.
 
-The release contains a macOS Apple Silicon DMG and a Windows x64 NSIS installer. They are development installers until signing/notarization is configured. Models download separately from the application. No release is dispatched by the changes that add this workflow.
+The release contains a macOS Apple Silicon DMG and a Windows x64 NSIS installer. macOS releases require Developer ID Application signing and notarization; missing signing secrets fail the workflow before packaging. Windows installers remain unsigned. See [macOS signing setup](MACOS-SIGNING.md). Models download separately from the application. Signing setup does not dispatch a release.
 
 ## Dependency policy
 

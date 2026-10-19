@@ -13,7 +13,10 @@
     "format:check": "prettier --check src scripts index.html package.json vite.config.ts tsconfig*.json src-tauri/*.json src-tauri/capabilities/*.json .github/workflows/*.yml README.md",
     "version:set": "node scripts/version.mjs",
     "check:versions": "node scripts/version.mjs --check",
-    "test": "node --test scripts/*.test.mjs"
+    "test": "node --test scripts/*.test.mjs",
+    "desktop:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
+    "signing:check": "node scripts/macos-signing.mjs check",
+    "build:macos": "node scripts/macos-signing.mjs build"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.4",
