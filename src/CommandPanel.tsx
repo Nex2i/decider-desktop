@@ -18,7 +18,7 @@ export default function CommandPanel({
   keyConfigured,
   onDictation,
 }: {
-  keyConfigured: boolean;
+  keyConfigured: boolean | null;
   onDictation: (text: string) => void;
 }) {
   const [text, setText] = useState("");
@@ -27,6 +27,7 @@ export default function CommandPanel({
   const [update, setUpdate] = useState<Update | null>(null);
   const [active, setActive] = useState(false);
   const [recording, setRecording] = useState(false);
+  const resultView = useRef<HTMLDivElement | null>(null);
   const session = useRef<string | null>(null);
   const mounted = useRef(false);
   const callback = useRef(onDictation);
@@ -76,6 +77,14 @@ export default function CommandPanel({
     };
   }, [desktop]);
 
+  useEffect(() => {
+    if (update)
+      resultView.current?.scrollIntoView({
+        block: "nearest",
+        behavior: "smooth",
+      });
+  }, [update?.commandId, update?.phase]);
+
   async function run(transcript: string) {
     if (!ready || !keyConfigured || session.current || !transcript.trim())
       return;
@@ -123,19 +132,7 @@ export default function CommandPanel({
 
   return (
     <>
-      <section
-        className="capture-card command-panel"
-        aria-label="Desktop command"
-      >
-        <div className="card-heading">
-          <h2>Speak an action</h2>
-          <span>JEV CLASSIFIER</span>
-        </div>
-        <p>
-          Say “Open Safari” or “Type remember the milk.” To use a control, name
-          its app and label, for example “Click Reload in Google Chrome.” One
-          action per recording.
-        </p>
+      <div className="command-options">
         <p className="fine-print">
           Commands send your transcript and app names to TypeSafe using your
           saved JEV key. Audio stays on this device. App opening and draft
@@ -154,11 +151,41 @@ export default function CommandPanel({
           Optional for clicking or focusing controls. Labels can include window
           or document names. Field contents and password controls are excluded.
         </p>
-        {!keyConfigured && (
+        {keyConfigured === null ? (
           <p className="feedback">
-            Save your JEV API key in Settings to use Command mode.
+            Checking secure key access. If macOS shows a Keychain prompt for
+            Decider, allow access there.
           </p>
+        ) : (
+          !keyConfigured && (
+            <p className="feedback">
+              Save your JEV API key in Settings to use Command mode.
+            </p>
+          )
         )}
+      </div>
+      <SpeechPanel
+        commandMode
+        disabled={!keyConfigured || !ready || active}
+        onActiveChange={setRecording}
+        onTranscript={(transcript) => {
+          setText(transcript);
+          void run(transcript);
+        }}
+      />
+      <section
+        className="settings-card command-panel"
+        aria-label="Desktop command"
+      >
+        <div className="card-heading">
+          <h2>Your command</h2>
+          <span>JEV CLASSIFIER</span>
+        </div>
+        <p>
+          Say “Open Safari” or “Type remember the milk.” To use a control, name
+          its app and label, for example “Click Reload in Google Chrome.” One
+          action per recording.
+        </p>
         <label htmlFor="spoken-command">Your command</label>
         <textarea
           id="spoken-command"
@@ -169,7 +196,7 @@ export default function CommandPanel({
             setText(event.target.value);
             setUpdate(null);
           }}
-          placeholder="Speak below, or type a command to test JEV."
+          placeholder="Your spoken command appears here. You can also type one to test JEV."
         />
         <div className="speech-actions">
           <button
@@ -194,6 +221,7 @@ export default function CommandPanel({
         </div>
         {update && (
           <div
+            ref={resultView}
             className={update.phase === "error" ? "feedback error" : "feedback"}
             role={update.phase === "error" ? "alert" : "status"}
           >
@@ -206,15 +234,6 @@ export default function CommandPanel({
           </div>
         )}
       </section>
-      <SpeechPanel
-        commandMode
-        disabled={!keyConfigured || !ready || active}
-        onActiveChange={setRecording}
-        onTranscript={(transcript) => {
-          setText(transcript);
-          void run(transcript);
-        }}
-      />
     </>
   );
 }

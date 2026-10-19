@@ -295,6 +295,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn command_inventory_keeps_duplicate_installs_and_does_not_serialize_launch_paths() {
+        let mut snapshot = DesktopSnapshot::new(false);
+        for path in [
+            "/Applications/Example.app",
+            "/Users/example/Applications/Example.app",
+        ] {
+            snapshot.installed_apps.push(InstalledApp {
+                id: identifier(path),
+                name: "Example".into(),
+                source: "Application bundle".into(),
+                path: path.into(),
+            });
+        }
+        let serialized = serde_json::to_string(&snapshot).unwrap();
+        assert!(!serialized.contains("/Applications"));
+        assert_eq!(
+            command_apps(snapshot).len(),
+            2,
+            "Duplicate names must remain visible for ambiguity rejection"
+        );
+    }
+
+    #[test]
     fn discovery_limits_are_explicit_and_ids_do_not_expose_paths() {
         let id = identifier("/Users/example/Applications/Example.app");
         assert_eq!(id.len(), 24);
@@ -369,7 +392,7 @@ pub(crate) fn command_apps(snapshot: DesktopSnapshot) -> Vec<crate::commands::Ap
     for installed in snapshot.installed_apps {
         if !apps
             .iter()
-            .any(|app| app.name.eq_ignore_ascii_case(&installed.name))
+            .any(|app| app.pid.is_some() && app.name.eq_ignore_ascii_case(&installed.name))
         {
             apps.push(crate::commands::AppCandidate {
                 name: installed.name,

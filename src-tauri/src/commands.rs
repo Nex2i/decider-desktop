@@ -315,6 +315,16 @@ fn run(
         .position(|(key, _)| key == &selected)
         .ok_or("Invalid app selection.")?;
     let target = &apps[index];
+    if apps
+        .iter()
+        .filter(|app| app.name.eq_ignore_ascii_case(&target.name))
+        .count()
+        > 1
+    {
+        return Err(
+            "Several apps share that name. Open the intended app manually, then try again.".into(),
+        );
+    }
     canceled(cancel)?;
     if route == "open" {
         native::open_app(target)?;
@@ -366,6 +376,14 @@ fn run(
         .position(|(key, _)| key == &selected)
         .ok_or("Invalid control selection.")?;
     let control = &controls[index];
+    if controls
+        .iter()
+        .filter(|candidate| candidate.description == control.description)
+        .count()
+        > 1
+    {
+        return Err("Several controls have that same label and context. Open the relevant window/menu and try a more specific command.".into());
+    }
     canceled(cancel)?;
     let expires = Instant::now();
     {

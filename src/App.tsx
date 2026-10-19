@@ -199,7 +199,7 @@ export default function App() {
                 <SpeechPanel onTranscript={appendTranscript} />
               ) : (
                 <CommandPanel
-                  keyConfigured={!!status?.jevKeyConfigured}
+                  keyConfigured={status?.jevKeyConfigured ?? null}
                   onDictation={appendTranscript}
                 />
               )}
